@@ -360,12 +360,12 @@ All accept optional `startDate` and `endDate` query params (`YYYY-MM-DD`).
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 **Abidur Rahman**
 - GitHub: [@abidurrahman11](https://github.com/abidurrahman11)
 - LinkedIn: [linkedin.com/in/abidurrahman11](https://linkedin.com/in/abidurrahman11)
-- Portfolio: [yourportfolio.com](https://abidurrahman11.github.io)
+- Portfolio: [abidurrahman11.github.io](https://abidurrahman11.github.io)
 
 ---
 
