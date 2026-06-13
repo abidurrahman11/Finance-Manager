@@ -146,7 +146,7 @@ class _GroupCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.15),
+                color: AppTheme.primary.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.folder, color: AppTheme.primary, size: 22),
           ),
@@ -174,8 +174,8 @@ class _GroupCard extends StatelessWidget {
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: group.isOwner
-                            ? AppTheme.primary.withOpacity(0.15)
-                            : AppTheme.secondary.withOpacity(0.15),
+                            ? AppTheme.primary.withValues(alpha: 0.15)
+                            : AppTheme.secondary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -456,7 +456,7 @@ class _ExpensesTab extends ConsumerWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8)),
               child:
                   Icon(Icons.shopping_bag_outlined, color: color, size: 16),
@@ -548,7 +548,7 @@ class _CollaboratorsTab extends StatelessWidget {
           ...collaborators.map((c) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
-                    backgroundColor: AppTheme.primary.withOpacity(0.2),
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
                     child: Text((c['name'] as String)[0].toUpperCase(),
                         style: const TextStyle(color: AppTheme.primary))),
                 title: Text(c['name'] as String,
@@ -561,7 +561,7 @@ class _CollaboratorsTab extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.15),
+                        color: AppTheme.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6)),
                     child: Text(c['role'] as String,
                         style: const TextStyle(

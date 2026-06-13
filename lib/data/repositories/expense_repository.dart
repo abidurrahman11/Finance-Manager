@@ -1,21 +1,20 @@
-import 'package:dio/dio.dart';
-import '../models/expense_model.dart';
-import '../../core/network/api_client.dart';
+import 'package:drift/drift.dart';
+
 import '../../core/network/api_exception.dart';
+import '../local/app_database.dart';
+import '../models/expense_model.dart';
 
 class ExpenseRepository {
-  final _dio = ApiClient().dio;
+  final AppDatabase _db;
 
-  // --- Groups ---
+  ExpenseRepository({AppDatabase? database})
+      : _db = database ?? AppDatabase.instance;
+
   Future<List<ExpenseGroupModel>> getGroups() async {
-    try {
-      final response = await _dio.get('/expenses/groups');
-      return (response.data as List)
-          .map((e) => ExpenseGroupModel.fromJson(e))
-          .toList();
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to load groups');
-    }
+    final rows = await _db
+        .customSelect('SELECT * FROM expense_groups ORDER BY created_at DESC')
+        .get();
+    return rows.map((row) => _groupFromRow(row.data)).toList();
   }
 
   Future<ExpenseGroupModel> createGroup({
@@ -24,72 +23,79 @@ class ExpenseRepository {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    try {
-      final response = await _dio.post('/expenses/groups', data: {
-        'title': title,
-        if (description != null) 'description': description,
-        if (startDate != null) 'start_date': startDate.toIso8601String(),
-        if (endDate != null) 'end_date': endDate.toIso8601String(),
-      });
-      return ExpenseGroupModel.fromJson({...response.data, 'role': 'owner'});
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to create group');
-    }
+    final now = DateTime.now().toIso8601String();
+    final id = await _db.customInsert(
+      '''
+      INSERT INTO expense_groups
+        (user_id, title, description, start_date, end_date, role, created_at)
+      VALUES (1, ?, ?, ?, ?, 'owner', ?)
+      ''',
+      variables: [
+        Variable.withString(title),
+        Variable(description),
+        Variable(startDate?.toIso8601String()),
+        Variable(endDate?.toIso8601String()),
+        Variable.withString(now),
+      ],
+    );
+    return ExpenseGroupModel(
+      id: id,
+      userId: 1,
+      title: title,
+      description: description,
+      startDate: startDate,
+      endDate: endDate,
+      role: 'owner',
+      createdAt: DateTime.parse(now),
+    );
   }
 
-  Future<void> updateGroup(int id, {
+  Future<void> updateGroup(
+    int id, {
     required String title,
     String? description,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    try {
-      await _dio.put('/expenses/groups/$id', data: {
-        'title': title,
-        'description': description,
-        'start_date': startDate?.toIso8601String(),
-        'end_date': endDate?.toIso8601String(),
-      });
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to update group');
-    }
+    await _db.customUpdate(
+      '''
+      UPDATE expense_groups
+      SET title = ?, description = ?, start_date = ?, end_date = ?
+      WHERE id = ?
+      ''',
+      variables: [
+        Variable.withString(title),
+        Variable(description),
+        Variable(startDate?.toIso8601String()),
+        Variable(endDate?.toIso8601String()),
+        Variable.withInt(id),
+      ],
+    );
   }
 
   Future<void> deleteGroup(int id) async {
-    try {
-      await _dio.delete('/expenses/groups/$id');
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to delete group');
-    }
+    await _db.customUpdate(
+      'DELETE FROM expense_groups WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    );
   }
 
   Future<void> addCollaborator(int groupId, String email, String role) async {
-    try {
-      await _dio.post('/expenses/groups/$groupId/collaborators',
-          data: {'user_email': email, 'role': role});
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to add collaborator');
-    }
+    throw ApiException(
+      'Expense group collaboration requires the backend and is unavailable for local personal groups.',
+    );
   }
 
   Future<List<Map<String, dynamic>>> getCollaborators(int groupId) async {
-    try {
-      final response = await _dio.get('/expenses/groups/$groupId/collaborators');
-      return List<Map<String, dynamic>>.from(response.data['collaborators']);
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to load collaborators');
-    }
+    return const [];
   }
 
   Future<void> removeCollaborator(int groupId, int userId) async {
-    try {
-      await _dio.delete('/expenses/groups/$groupId/collaborators/$userId');
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to remove collaborator');
-    }
+    throw ApiException(
+      'Expense group collaboration requires the backend and is unavailable for local personal groups.',
+    );
   }
 
-  // --- Expenses ---
   Future<PaginatedExpenses> getExpenses({
     String? category,
     String? startDate,
@@ -100,21 +106,60 @@ class ExpenseRepository {
     String sortBy = 'date',
     String order = 'desc',
   }) async {
-    try {
-      final response = await _dio.get('/expenses', queryParameters: {
-        if (category != null) 'category': category,
-        if (startDate != null) 'startDate': startDate,
-        if (endDate != null) 'endDate': endDate,
-        if (expenseGroupId != null) 'expense_group_id': expenseGroupId,
-        'page': page,
-        'limit': limit,
-        'sortBy': sortBy,
-        'order': order,
-      });
-      return PaginatedExpenses.fromJson(response.data);
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to load expenses');
+    final clauses = <String>[];
+    final variables = <Variable>[];
+
+    if (category != null) {
+      clauses.add('category = ?');
+      variables.add(Variable.withString(category));
     }
+    if (startDate != null) {
+      clauses.add('date(expense_date) >= date(?)');
+      variables.add(Variable.withString(startDate));
+    }
+    if (endDate != null) {
+      clauses.add('date(expense_date) <= date(?)');
+      variables.add(Variable.withString(endDate));
+    }
+    if (expenseGroupId != null) {
+      clauses.add('expense_group_id = ?');
+      variables.add(Variable.withInt(expenseGroupId));
+    }
+
+    final where = clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}';
+    final countRows = await _db
+        .customSelect(
+          'SELECT COUNT(*) AS total FROM expenses $where',
+          variables: variables,
+        )
+        .get();
+    final total = countRows.first.data['total'] as int;
+    final totalPages = total == 0 ? 1 : (total / limit).ceil();
+    final offset = (page - 1) * limit;
+    final direction = order.toLowerCase() == 'asc' ? 'ASC' : 'DESC';
+    final orderColumn = sortBy == 'amount' ? 'amount' : 'expense_date';
+
+    final rows = await _db.customSelect(
+      '''
+          SELECT * FROM expenses
+          $where
+          ORDER BY $orderColumn $direction, created_at DESC
+          LIMIT ? OFFSET ?
+          ''',
+      variables: [
+        ...variables,
+        Variable.withInt(limit),
+        Variable.withInt(offset),
+      ],
+    ).get();
+
+    return PaginatedExpenses(
+      page: page,
+      limit: limit,
+      total: total,
+      totalPages: totalPages,
+      data: rows.map((row) => _expenseFromRow(row.data)).toList(),
+    );
   }
 
   Future<ExpenseModel> createExpense({
@@ -126,21 +171,28 @@ class ExpenseRepository {
     int? expenseGroupId,
     String? imagePath,
   }) async {
-    try {
-      final formData = FormData.fromMap({
-        'title': title,
-        'amount': amount.toString(),
-        'category': category,
-        if (expenseDate != null) 'expense_date': expenseDate.toIso8601String(),
-        if (notes != null) 'notes': notes,
-        if (expenseGroupId != null) 'expense_group_id': expenseGroupId.toString(),
-        if (imagePath != null) 'image': await MultipartFile.fromFile(imagePath),
-      });
-      final response = await _dio.post('/expenses', data: formData);
-      return ExpenseModel.fromJson(response.data);
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to create expense');
-    }
+    final now = DateTime.now().toIso8601String();
+    final date = (expenseDate ?? DateTime.now()).toIso8601String();
+    final id = await _db.customInsert(
+      '''
+      INSERT INTO expenses
+        (user_id, title, amount, category, expense_date, notes, image_url,
+         expense_group_id, created_at, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''',
+      variables: [
+        Variable.withString(title),
+        Variable.withReal(amount),
+        Variable.withString(category),
+        Variable.withString(date),
+        Variable(notes),
+        Variable(imagePath),
+        Variable(expenseGroupId),
+        Variable.withString(now),
+        Variable.withString(now),
+      ],
+    );
+    return _getExpenseById(id);
   }
 
   Future<ExpenseModel> updateExpense(
@@ -153,28 +205,74 @@ class ExpenseRepository {
     int? expenseGroupId,
     String? imagePath,
   }) async {
-    try {
-      final formData = FormData.fromMap({
-        'title': title,
-        'amount': amount.toString(),
-        'category': category,
-        if (expenseDate != null) 'expense_date': expenseDate.toIso8601String(),
-        if (notes != null) 'notes': notes,
-        if (expenseGroupId != null) 'expense_group_id': expenseGroupId.toString(),
-        if (imagePath != null) 'image': await MultipartFile.fromFile(imagePath),
-      });
-      final response = await _dio.put('/expenses/$id', data: formData);
-      return ExpenseModel.fromJson(response.data);
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to update expense');
-    }
+    final now = DateTime.now().toIso8601String();
+    await _db.customUpdate(
+      '''
+      UPDATE expenses
+      SET title = ?, amount = ?, category = ?, expense_date = ?, notes = ?,
+          image_url = COALESCE(?, image_url), expense_group_id = ?,
+          updated_at = ?
+      WHERE id = ?
+      ''',
+      variables: [
+        Variable.withString(title),
+        Variable.withReal(amount),
+        Variable.withString(category),
+        Variable.withString((expenseDate ?? DateTime.now()).toIso8601String()),
+        Variable(notes),
+        Variable(imagePath),
+        Variable(expenseGroupId),
+        Variable.withString(now),
+        Variable.withInt(id),
+      ],
+    );
+    return _getExpenseById(id);
   }
 
   Future<void> deleteExpense(int id) async {
-    try {
-      await _dio.delete('/expenses/$id');
-    } on DioException catch (e) {
-      throw ApiException(e.response?.data['message'] ?? 'Failed to delete expense');
-    }
+    await _db.customUpdate(
+      'DELETE FROM expenses WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    );
+  }
+
+  Future<ExpenseModel> _getExpenseById(int id) async {
+    final rows = await _db.customSelect(
+      'SELECT * FROM expenses WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    ).get();
+    return _expenseFromRow(rows.first.data);
+  }
+
+  ExpenseModel _expenseFromRow(Map<String, Object?> row) {
+    return ExpenseModel(
+      id: row['id'] as int,
+      userId: row['user_id'] as int,
+      title: row['title'] as String,
+      amount: (row['amount'] as num).toDouble(),
+      category: row['category'] as String,
+      expenseDate: DateTime.parse(row['expense_date'] as String),
+      notes: row['notes'] as String?,
+      imageUrl: row['image_url'] as String?,
+      expenseGroupId: row['expense_group_id'] as int?,
+      createdAt: DateTime.parse(row['created_at'] as String),
+    );
+  }
+
+  ExpenseGroupModel _groupFromRow(Map<String, Object?> row) {
+    return ExpenseGroupModel(
+      id: row['id'] as int,
+      userId: row['user_id'] as int,
+      title: row['title'] as String,
+      description: row['description'] as String?,
+      startDate: row['start_date'] != null
+          ? DateTime.parse(row['start_date'] as String)
+          : null,
+      endDate: row['end_date'] != null
+          ? DateTime.parse(row['end_date'] as String)
+          : null,
+      role: row['role'] as String,
+      createdAt: DateTime.parse(row['created_at'] as String),
+    );
   }
 }

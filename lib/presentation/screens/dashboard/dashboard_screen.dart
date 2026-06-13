@@ -57,7 +57,7 @@ class DashboardScreen extends ConsumerWidget {
                       GestureDetector(
                         onTap: () => context.push('/profile'),
                         child: CircleAvatar(
-                          backgroundColor: AppTheme.primary.withOpacity(0.2),
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
                           child: Text(
                             user?.name.isNotEmpty == true
                                 ? user!.name[0].toUpperCase()
@@ -114,8 +114,8 @@ class DashboardScreen extends ConsumerWidget {
                               'Monthly Cash Flow',
                               style: TextStyle(
                                   color: cf.isPositive
-                                      ? AppTheme.income.withOpacity(0.8)
-                                      : AppTheme.expense.withOpacity(0.8),
+                                      ? AppTheme.income.withValues(alpha: 0.8)
+                                      : AppTheme.expense.withValues(alpha: 0.8),
                                   fontSize: 13),
                             ),
                           ]),
@@ -336,7 +336,7 @@ class DashboardScreen extends ConsumerWidget {
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color: color.withOpacity(0.15),
+                                        color: color.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(Icons.shopping_bag_outlined,
@@ -400,7 +400,7 @@ class _FlowItem extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: TextStyle(color: color.withOpacity(0.7), fontSize: 11)),
+              style: TextStyle(color: color.withValues(alpha: 0.7), fontSize: 11)),
           Text(CurrencyFormatter.formatCompact(value),
               style: TextStyle(
                   color: color, fontWeight: FontWeight.bold, fontSize: 14)),
@@ -429,9 +429,9 @@ class _QuickAction extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.2)),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
           ),
           child: Column(
             children: [
@@ -473,7 +473,7 @@ class _CategoryRow extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8)),
           child: Icon(Icons.circle, color: color, size: 10),
         ),
@@ -497,7 +497,7 @@ class _CategoryRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
                 value: percent,
-                backgroundColor: color.withOpacity(0.1),
+                backgroundColor: color.withValues(alpha: 0.1),
                 valueColor: AlwaysStoppedAnimation<Color>(color),
                 minHeight: 4,
               ),

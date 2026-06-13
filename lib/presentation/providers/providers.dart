@@ -94,12 +94,7 @@ class IncomesNotifier extends StateNotifier<IncomesState> {
     loadInitial();
   }
 
-  String? _category;
-  int? _groupId;
-
   Future<void> loadInitial({String? category, int? groupId}) async {
-    _category = category;
-    _groupId = groupId;
     state = const IncomesState(isLoading: true);
     try {
       final result = await _repo.getIncomes(

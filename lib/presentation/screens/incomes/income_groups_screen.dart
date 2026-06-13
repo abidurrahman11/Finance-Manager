@@ -147,7 +147,7 @@ class _GroupCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                color: AppTheme.income.withOpacity(0.15),
+                color: AppTheme.income.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.folder, color: AppTheme.income, size: 22),
           ),
@@ -175,8 +175,8 @@ class _GroupCard extends StatelessWidget {
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: group.isOwner
-                            ? AppTheme.income.withOpacity(0.15)
-                            : AppTheme.secondary.withOpacity(0.15),
+                            ? AppTheme.income.withValues(alpha: 0.15)
+                            : AppTheme.secondary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -440,8 +440,6 @@ class _IncomesTab extends ConsumerWidget {
       itemCount: groupIncomes.length,
       itemBuilder: (ctx, i) {
         final inc = groupIncomes[i];
-        final color =
-            AppTheme.categoryColors[i % AppTheme.categoryColors.length];
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),
@@ -453,7 +451,7 @@ class _IncomesTab extends ConsumerWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                  color: AppTheme.income.withOpacity(0.15),
+                  color: AppTheme.income.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8)),
               child: const Icon(Icons.savings_outlined,
                   color: AppTheme.income, size: 16),
@@ -548,7 +546,7 @@ class _CollaboratorsTab extends StatelessWidget {
           ...collaborators.map((c) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
-                    backgroundColor: AppTheme.income.withOpacity(0.2),
+                    backgroundColor: AppTheme.income.withValues(alpha: 0.2),
                     child: Text((c['name'] as String)[0].toUpperCase(),
                         style: const TextStyle(color: AppTheme.income))),
                 title: Text(c['name'] as String,
@@ -561,7 +559,7 @@ class _CollaboratorsTab extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                        color: AppTheme.income.withOpacity(0.15),
+                        color: AppTheme.income.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6)),
                     child: Text(c['role'] as String,
                         style: const TextStyle(

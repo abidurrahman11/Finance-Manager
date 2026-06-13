@@ -22,22 +22,11 @@ import 'data/models/income_model.dart';
 import 'data/models/plan_model.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  ref.watch(authProvider);
 
   return GoRouter(
     initialLocation: '/dashboard',
-    redirect: (context, state) {
-      final isAuth = authState.status == AuthStatus.authenticated;
-      final isUnknown = authState.status == AuthStatus.unknown;
-      final isAuthRoute = state.matchedLocation.startsWith('/login') ||
-          state.matchedLocation.startsWith('/register') ||
-          state.matchedLocation.startsWith('/forgot-password');
-
-      if (isUnknown) return null;
-      if (!isAuth && !isAuthRoute) return '/login';
-      if (isAuth && isAuthRoute) return '/dashboard';
-      return null;
-    },
+    redirect: (_, __) => null,
     routes: [
       // Auth routes (outside shell)
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
@@ -49,7 +38,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Main shell with bottom nav. 6 tabs
       ShellRoute(
         builder: (context, state, child) =>
-            MainShell(child: child, location: state.matchedLocation),
+            MainShell(location: state.matchedLocation, child: child),
         routes: [
           GoRoute(
             path: '/dashboard',
@@ -179,7 +168,7 @@ class MainShell extends StatelessWidget {
               },
               backgroundColor: Theme.of(context).colorScheme.surface,
               indicatorColor:
-                  Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
               destinations: const [
                 NavigationDestination(
                     icon: Icon(Icons.home_outlined),

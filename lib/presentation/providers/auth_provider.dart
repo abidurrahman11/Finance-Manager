@@ -49,10 +49,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final user = await _repo.getMe();
         state = AuthState(status: AuthStatus.authenticated, user: user);
       } catch (_) {
-        state = const AuthState(status: AuthStatus.unauthenticated);
+        state = AuthState(
+          status: AuthStatus.authenticated,
+          user: AuthRepository.localUser,
+        );
       }
     } else {
-      state = const AuthState(status: AuthStatus.unauthenticated);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: AuthRepository.localUser,
+      );
     }
   }
 
@@ -65,7 +71,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } catch (e) {
       state = state.copyWith(
-          isLoading: false, status: AuthStatus.unauthenticated, error: e.toString());
+        isLoading: false,
+        status: AuthStatus.authenticated,
+        user: AuthRepository.localUser,
+        error: e.toString(),
+      );
       return false;
     }
   }
@@ -84,7 +94,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repo.logout();
-    state = const AuthState(status: AuthStatus.unauthenticated);
+    state = AuthState(
+      status: AuthStatus.authenticated,
+      user: AuthRepository.localUser,
+    );
   }
 
   Future<bool> changePassword(String oldPass, String newPass) async {

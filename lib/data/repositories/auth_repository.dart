@@ -1,13 +1,21 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../models/user_model.dart';
+
+import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
-import '../../core/constants/app_constants.dart';
+import '../models/user_model.dart';
 
 class AuthRepository {
   final _dio = ApiClient().dio;
   final _storage = const FlutterSecureStorage();
+
+  static final localUser = UserModel(
+    id: 1,
+    name: 'Local User',
+    email: 'offline@finance.manager',
+    isVerified: true,
+  );
 
   Future<void> register({
     required String name,
@@ -38,11 +46,13 @@ class AuthRepository {
         'password': password,
       });
       await _storage.write(
-          key: AppConstants.accessTokenKey,
-          value: response.data['accessToken']);
+        key: AppConstants.accessTokenKey,
+        value: response.data['accessToken'],
+      );
       await _storage.write(
-          key: AppConstants.refreshTokenKey,
-          value: response.data['refreshToken']);
+        key: AppConstants.refreshTokenKey,
+        value: response.data['refreshToken'],
+      );
     } on DioException catch (e) {
       throw ApiException(
         e.response?.data['message'] ?? 'Login failed',
@@ -59,7 +69,8 @@ class AuthRepository {
         await _dio.post('/auth/logout', data: {'refreshToken': refreshToken});
       }
     } catch (_) {}
-    await _storage.deleteAll();
+    await _storage.delete(key: AppConstants.accessTokenKey);
+    await _storage.delete(key: AppConstants.refreshTokenKey);
   }
 
   Future<UserModel> getMe() async {
@@ -78,6 +89,7 @@ class AuthRepository {
     required String oldPassword,
     required String newPassword,
   }) async {
+    if (!await isLoggedIn()) return;
     try {
       await _dio.post('/auth/change-password', data: {
         'oldPassword': oldPassword,

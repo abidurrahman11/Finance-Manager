@@ -248,7 +248,7 @@ class _IncomeTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-                color: AppTheme.income.withOpacity(0.1),
+                color: AppTheme.income.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12)),
             child: const Icon(Icons.savings_outlined,
                 color: AppTheme.income, size: 20),

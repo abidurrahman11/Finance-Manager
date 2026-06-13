@@ -31,7 +31,7 @@ class ProfileScreen extends ConsumerWidget {
             child: Row(children: [
               CircleAvatar(
                 radius: 32,
-                backgroundColor: AppTheme.primary.withOpacity(0.2),
+                backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
                 child: Text(
                   user?.name.isNotEmpty == true
                       ? user!.name[0].toUpperCase()
@@ -323,14 +323,13 @@ class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final Color? color;
 
   const _SettingsTile(
-      {required this.icon, required this.label, required this.onTap, this.color});
+      {required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? AppTheme.textPrimary;
+    const c = AppTheme.textPrimary;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -341,10 +340,10 @@ class _SettingsTile extends StatelessWidget {
           const SizedBox(width: 16),
           Expanded(
               child: Text(label,
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: c, fontSize: 15))),
           Icon(Icons.chevron_right,
-              color: AppTheme.textSecondary.withOpacity(0.5), size: 20),
+              color: AppTheme.textSecondary.withValues(alpha: 0.5), size: 20),
         ]),
       ),
     );

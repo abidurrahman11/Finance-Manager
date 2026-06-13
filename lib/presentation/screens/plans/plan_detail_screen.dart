@@ -292,7 +292,7 @@ class PlanDetailScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
                       color: operation == 'add'
-                          ? AppTheme.expense.withOpacity(0.15)
+                          ? AppTheme.expense.withValues(alpha: 0.15)
                           : AppTheme.surfaceVariant,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -327,7 +327,7 @@ class PlanDetailScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
                       color: operation == 'subtract'
-                          ? AppTheme.income.withOpacity(0.15)
+                          ? AppTheme.income.withValues(alpha: 0.15)
                           : AppTheme.surfaceVariant,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -620,7 +620,7 @@ class _PlanItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isOver
-              ? AppTheme.error.withOpacity(0.3)
+              ? AppTheme.error.withValues(alpha: 0.3)
               : AppTheme.divider,
         ),
       ),
@@ -630,7 +630,7 @@ class _PlanItemCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8)),
             child: Icon(Icons.category_outlined, color: color, size: 16),
           ),
@@ -658,7 +658,7 @@ class _PlanItemCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.15),
+                      color: AppTheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6)),
                   child: const Icon(Icons.edit_note,
                       color: AppTheme.primary, size: 16),
@@ -698,7 +698,7 @@ class _PlanItemCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: pct,
-            backgroundColor: color.withOpacity(0.1),
+            backgroundColor: color.withValues(alpha: 0.1),
             valueColor: AlwaysStoppedAnimation<Color>(
               isOver
                   ? AppTheme.error
@@ -862,7 +862,7 @@ class _CollaboratorsSheetState
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
-                        backgroundColor: AppTheme.primary.withOpacity(0.2),
+                        backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
                         child: Text(c.name[0].toUpperCase(),
                             style:
                                 const TextStyle(color: AppTheme.primary))),
@@ -876,7 +876,7 @@ class _CollaboratorsSheetState
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.15),
+                            color: AppTheme.primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6)),
                         child: Text(c.role,
                             style: const TextStyle(

@@ -63,8 +63,7 @@ class _BillsScreenState extends ConsumerState<BillsScreen>
     );
   }
 
-  void _showBillForm(BuildContext context, WidgetRef ref,
-      {BillModel? bill}) {
+  void _showBillForm(BuildContext context, WidgetRef ref, {BillModel? bill}) {
     final titleCtrl = TextEditingController(text: bill?.title ?? '');
     final amountCtrl =
         TextEditingController(text: bill?.amount.toString() ?? '');
@@ -145,7 +144,9 @@ class _BillsScreenState extends ConsumerState<BillsScreen>
               icon: bill != null ? Icons.save : Icons.add,
               onPressed: () async {
                 if (titleCtrl.text.trim().isEmpty ||
-                    amountCtrl.text.trim().isEmpty) return;
+                    amountCtrl.text.trim().isEmpty) {
+                  return;
+                }
                 if (bill != null) {
                   await ref.read(billsProvider.notifier).updateBill(bill.id,
                       title: titleCtrl.text.trim(),
@@ -178,8 +179,7 @@ class _MonthlyTrackerTab extends ConsumerStatefulWidget {
   const _MonthlyTrackerTab();
 
   @override
-  ConsumerState<_MonthlyTrackerTab> createState() =>
-      _MonthlyTrackerTabState();
+  ConsumerState<_MonthlyTrackerTab> createState() => _MonthlyTrackerTabState();
 }
 
 class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
@@ -199,8 +199,8 @@ class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
         child: Row(children: [
           IconButton(
             icon: const Icon(Icons.chevron_left, color: AppTheme.textPrimary),
-            onPressed: () => setState(() =>
-                _month = DateTime(_month.year, _month.month - 1)),
+            onPressed: () => setState(
+                () => _month = DateTime(_month.year, _month.month - 1)),
           ),
           Expanded(
             child: Text(
@@ -279,8 +279,7 @@ class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _BillPaymentCard(
                     payment: payments[i],
-                    onToggle: () =>
-                        _togglePayment(ctx, payments[i]),
+                    onToggle: () => _togglePayment(ctx, payments[i]),
                   ),
                 ),
               ),
@@ -303,13 +302,12 @@ class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
           onPressed: () async {
             final ok = await showConfirmDialog(context,
                 title: 'Reset Payments',
-                message:
-                    'Mark all bills as pending for the current month?',
+                message: 'Mark all bills as pending for $_monthKey?',
                 confirmLabel: 'Reset',
                 confirmColor: AppTheme.warning);
             if (ok) {
               final repo = BillRepository();
-              await repo.resetMonthlyPayments();
+              await repo.resetMonthlyPayments(month: _monthKey);
               ref.invalidate(billPaymentsProvider(_monthKey));
             }
           },
@@ -329,8 +327,7 @@ class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppTheme.error));
+            content: Text(e.toString()), backgroundColor: AppTheme.error));
       }
     }
   }
@@ -353,8 +350,7 @@ class _ManageBillsTab extends ConsumerWidget {
             subtitle: 'Add bills to track your monthly obligations',
           );
         }
-        final totalMonthly =
-            list.fold(0.0, (s, b) => s + b.amount);
+        final totalMonthly = list.fold(0.0, (s, b) => s + b.amount);
         return Column(children: [
           Container(
             margin: const EdgeInsets.all(16),
@@ -373,8 +369,8 @@ class _ManageBillsTab extends ConsumerWidget {
               const SizedBox(width: 12),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Total Monthly',
-                    style: TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 12)),
+                    style:
+                        TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                 Text(CurrencyFormatter.format(totalMonthly),
                     style: const TextStyle(
                         fontSize: 22,
@@ -403,9 +399,7 @@ class _ManageBillsTab extends ConsumerWidget {
                           title: 'Delete Bill',
                           message: 'Delete "${list[i].title}"?');
                       if (ok) {
-                        ref
-                            .read(billsProvider.notifier)
-                            .delete(list[i].id);
+                        ref.read(billsProvider.notifier).delete(list[i].id);
                       }
                     },
                   ),
@@ -443,8 +437,8 @@ class _BillPaymentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isPaid
-              ? AppTheme.success.withOpacity(0.4)
-              : AppTheme.warning.withOpacity(0.3),
+              ? AppTheme.success.withValues(alpha: 0.4)
+              : AppTheme.warning.withValues(alpha: 0.3),
         ),
       ),
       child: Row(children: [
@@ -456,7 +450,7 @@ class _BillPaymentCard extends StatelessWidget {
             height: 28,
             decoration: BoxDecoration(
               color: isPaid
-                  ? AppTheme.success.withOpacity(0.15)
+                  ? AppTheme.success.withValues(alpha: 0.15)
                   : Colors.transparent,
               border: Border.all(
                 color: isPaid ? AppTheme.success : AppTheme.textSecondary,
@@ -471,16 +465,15 @@ class _BillPaymentCard extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(payment.title,
                 style: TextStyle(
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
-                    color: isPaid
-                        ? AppTheme.textSecondary
-                        : AppTheme.textPrimary,
-                    decoration:
-                        isPaid ? TextDecoration.lineThrough : null)),
+                    color:
+                        isPaid ? AppTheme.textSecondary : AppTheme.textPrimary,
+                    decoration: isPaid ? TextDecoration.lineThrough : null)),
             Row(children: [
               Text('Due: ${payment.dueDay}${_ordinal(payment.dueDay)}',
                   style: const TextStyle(
@@ -501,7 +494,8 @@ class _BillPaymentCard extends StatelessWidget {
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(
-            CurrencyFormatter.format(payment.paidAmount ?? payment.expectedAmount),
+            CurrencyFormatter.format(
+                payment.paidAmount ?? payment.expectedAmount),
             style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
@@ -511,8 +505,8 @@ class _BillPaymentCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: isPaid
-                  ? AppTheme.success.withOpacity(0.1)
-                  : AppTheme.warning.withOpacity(0.1),
+                  ? AppTheme.success.withValues(alpha: 0.1)
+                  : AppTheme.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -563,14 +557,15 @@ class _BillManageCard extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-              color: AppTheme.warning.withOpacity(0.1),
+              color: AppTheme.warning.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12)),
           child: const Icon(Icons.receipt_outlined,
               color: AppTheme.warning, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(bill.title,
                 style: const TextStyle(
                     fontWeight: FontWeight.w500,
@@ -608,8 +603,12 @@ class _BillManageCard extends StatelessWidget {
                 ])),
           ],
           onSelected: (v) {
-            if (v == 'edit') onEdit();
-            if (v == 'delete') onDelete();
+            if (v == 'edit') {
+              onEdit();
+            }
+            if (v == 'delete') {
+              onDelete();
+            }
           },
         ),
       ]),
