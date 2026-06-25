@@ -10,14 +10,17 @@ import '../../../core/constants/app_constants.dart';
 /// Root incomes screen at /incomes.
 ///
 /// Layout (top → bottom):
-///   1. Two compact group-button cards — Offline Groups / Online Groups.
-///   2. Category filter chips for personal (ungrouped, offline) incomes.
-///   3. Full personal income list — local only, no group.
-///   4. FAB — Add Income (no group context).
+///   1. Two compact group-button cards — Offline Groups / Online Groups.  [fixed]
+///   2. Category filter chips for personal (ungrouped, offline) incomes.  [fixed]
+///   3. Divider.                                                           [fixed]
+///   4. Personal income list with pull-to-refresh — local only, no group. [scrollable]
+///   5. FAB — Add Income (no group context).
 ///
-/// This directly mirrors [ExpensesHubScreen] — same layout, same patterns,
-/// same offline/online split. Users coming from the expense screen immediately
-/// understand the income screen.
+/// The group cards and chips are fixed and never scroll or refresh.
+/// Only the income list section (below the divider) is refreshable.
+/// [RefreshIndicator] wraps only the [Expanded] list area, and
+/// [AlwaysScrollableScrollPhysics] ensures the pull gesture is recognised
+/// even when the list is empty or shorter than the viewport.
 class IncomesHubScreen extends ConsumerStatefulWidget {
   const IncomesHubScreen({super.key});
 
@@ -41,6 +44,8 @@ class _IncomesHubScreenState extends ConsumerState<IncomesHubScreen> {
     super.dispose();
   }
 
+  // ── Pagination trigger ──────────────────────────────────────────────────────
+
   void _onScroll() {
     if (_scrollCtrl.position.pixels >=
         _scrollCtrl.position.maxScrollExtent - 200) {
@@ -48,18 +53,22 @@ class _IncomesHubScreenState extends ConsumerState<IncomesHubScreen> {
     }
   }
 
+  // ── Category selection ──────────────────────────────────────────────────────
+
   void _selectCategory(String? category) {
     setState(() => _selectedCategory = category);
-    ref
-        .read(personalIncomesProvider.notifier)
-        .loadInitial(category: category);
+    ref.read(personalIncomesProvider.notifier).loadInitial(category: category);
   }
+
+  // ── Refresh — income list only ──────────────────────────────────────────────
 
   Future<void> _onRefresh() async {
     await ref
         .read(personalIncomesProvider.notifier)
         .loadInitial(category: _selectedCategory);
   }
+
+  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +94,7 @@ class _IncomesHubScreenState extends ConsumerState<IncomesHubScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── 1. Group button cards ─────────────────────────────────
+          // ── 1. Group button cards — fixed, never scrolls ────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Row(
@@ -95,8 +104,7 @@ class _IncomesHubScreenState extends ConsumerState<IncomesHubScreen> {
                     icon: Icons.folder_outlined,
                     label: 'Offline Groups',
                     color: AppTheme.secondary,
-                    onTap: () =>
-                        context.push('/incomes/groups/offline'),
+                    onTap: () => context.push('/incomes/groups/offline'),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -105,15 +113,14 @@ class _IncomesHubScreenState extends ConsumerState<IncomesHubScreen> {
                     icon: Icons.cloud_outlined,
                     label: 'Online Groups',
                     color: AppTheme.primary,
-                    onTap: () =>
-                        context.push('/incomes/groups/online'),
+                    onTap: () => context.push('/incomes/groups/online'),
                   ),
                 ),
               ],
             ),
           ),
 
-          // ── 2. Category filter chips ──────────────────────────────
+          // ── 2. Category filter chips — fixed, never scrolls ─────────────────
           SizedBox(
             height: 50,
             child: ListView(
@@ -135,65 +142,91 @@ class _IncomesHubScreenState extends ConsumerState<IncomesHubScreen> {
               ],
             ),
           ),
+
+          // ── 3. Divider — fixed ──────────────────────────────────────────────
           const Divider(height: 1),
 
-          // ── 3. Personal income list ───────────────────────────────
+          // ── 4. Income list — refreshable ────────────────────────────────────
+          //
+          // RefreshIndicator wraps only this Expanded section.
+          // AlwaysScrollableScrollPhysics ensures the overscroll that triggers
+          // the indicator is detectable even when the list is empty or short
+          // (i.e. content doesn't fill the remaining viewport height).
           Expanded(
             child: state.isLoading && state.incomes.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : state.incomes.isEmpty
-                    ? EmptyState(
-                        icon: Icons.savings_outlined,
-                        title: 'No income recorded yet',
-                        subtitle:
-                            'Tap the button below to record your first income.',
-                        actionLabel: 'Add Income',
-                        onAction: () => context.push('/incomes/new'),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _onRefresh,
-                        child: ListView.builder(
-                          controller: _scrollCtrl,
-                          padding:
-                              const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                          itemCount: state.incomes.length +
-                              (state.hasMore ? 1 : 0),
-                          itemBuilder: (context, i) {
-                            if (i == state.incomes.length) {
-                              return const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(
-                                    child: CircularProgressIndicator()),
-                              );
-                            }
-                            final inc = state.incomes[i];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: IncomeListTile(
-                                income: inc,
-                                colorIndex: i,
-                                onEdit: () => context.push(
-                                    '/incomes/edit',
-                                    extra: inc),
-                                onDelete: () async {
-                                  final ok = await showConfirmDialog(
-                                    context,
-                                    title: 'Delete Income',
-                                    message:
-                                        'Delete "${inc.title}"? This cannot be undone.',
-                                  );
-                                  if (ok) {
-                                    ref
-                                        .read(personalIncomesProvider
-                                            .notifier)
-                                        .delete(inc.id);
-                                  }
-                                },
+                : RefreshIndicator(
+                    onRefresh: _onRefresh,
+                    color: AppTheme.income,
+                    child: state.incomes.isEmpty
+                        // ── Empty state inside a scrollable so the pull
+                        //    gesture still registers on the list area.
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(
+                                // Fill the visible list area so there is
+                                // enough drag surface when empty.
+                                height:
+                                    MediaQuery.of(context).size.height * 0.55,
+                                child: EmptyState(
+                                  icon: Icons.savings_outlined,
+                                  title: 'No income recorded yet',
+                                  subtitle:
+                                      'Tap the button below to record your first income.',
+                                  actionLabel: 'Add Income',
+                                  onAction: () =>
+                                      context.push('/incomes/new'),
+                                ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                            ],
+                          )
+                        // ── Data list ──────────────────────────────────
+                        : ListView.builder(
+                            controller: _scrollCtrl,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                            itemCount: state.incomes.length +
+                                (state.hasMore ? 1 : 0),
+                            itemBuilder: (context, i) {
+                              if (i == state.incomes.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+                              final inc = state.incomes[i];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: IncomeListTile(
+                                  income: inc,
+                                  colorIndex: i,
+                                  onEdit: () => context.push(
+                                    '/incomes/edit',
+                                    extra: inc,
+                                  ),
+                                  onDelete: () async {
+                                    final ok = await showConfirmDialog(
+                                      context,
+                                      title: 'Delete Income',
+                                      message:
+                                          'Delete "${inc.title}"? This cannot be undone.',
+                                    );
+                                    if (ok) {
+                                      ref
+                                          .read(
+                                              personalIncomesProvider.notifier)
+                                          .delete(inc.id);
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
           ),
         ],
       ),
@@ -225,8 +258,7 @@ class _GroupButtonCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: color.withValues(alpha: 0.35)),
@@ -252,8 +284,11 @@ class _GroupButtonCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(Icons.chevron_right,
-                  size: 16, color: AppTheme.textSecondary),
+              const Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: AppTheme.textSecondary,
+              ),
             ],
           ),
         ),
@@ -283,21 +318,17 @@ class _FilterChip extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
-            color:
-                selected ? AppTheme.income : AppTheme.surfaceVariant,
+            color: selected ? AppTheme.income : AppTheme.surfaceVariant,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color:
-                  selected ? Colors.white : AppTheme.textSecondary,
+              color: selected ? Colors.white : AppTheme.textSecondary,
               fontSize: 12,
-              fontWeight:
-                  selected ? FontWeight.w600 : FontWeight.normal,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
         ),
