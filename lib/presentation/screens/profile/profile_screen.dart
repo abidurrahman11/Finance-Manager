@@ -10,7 +10,9 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
+    final auth = ref.watch(authProvider);
+    final user = auth.user;
+    final hasRemoteSession = auth.hasRemoteSession;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -63,25 +65,42 @@ class ProfileScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       Row(children: [
                         Icon(
-                          user?.isVerified == true
+                          hasRemoteSession && user?.isVerified == true
                               ? Icons.verified
-                              : Icons.warning_amber_outlined,
+                              : Icons.phone_android_outlined,
                           size: 14,
-                          color: user?.isVerified == true
+                          color: hasRemoteSession && user?.isVerified == true
                               ? AppTheme.success
-                              : AppTheme.warning,
+                              : AppTheme.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          user?.isVerified == true
-                              ? 'Verified account'
-                              : 'Email not verified',
+                          hasRemoteSession
+                              ? (user?.isVerified == true
+                                  ? 'Verified account'
+                                  : 'Email not verified')
+                              : 'Offline local mode',
                           style: TextStyle(
                               fontSize: 12,
-                              color: user?.isVerified == true
+                              color: hasRemoteSession && user?.isVerified == true
                                   ? AppTheme.success
-                                  : AppTheme.warning),
+                                  : AppTheme.textSecondary),
                         ),
+                        if (hasRemoteSession && user?.isVerified == false) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => context.push('/verify-email'),
+                            child: const Text(
+                              'Verify Now',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.primary,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ],
                       ]),
                     ]),
               ),
@@ -100,17 +119,31 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 8),
 
           _SettingsCard(children: [
-            _SettingsTile(
-              icon: Icons.lock_outline,
-              label: 'Change Password',
-              onTap: () => _showChangePassword(context, ref),
-            ),
-            const Divider(height: 1, indent: 52),
-            _SettingsTile(
-              icon: Icons.email_outlined,
-              label: 'Forgot / Reset Password',
-              onTap: () => context.push('/forgot-password'),
-            ),
+            if (hasRemoteSession) ...[
+              _SettingsTile(
+                icon: Icons.lock_outline,
+                label: 'Change Password',
+                onTap: () => _showChangePassword(context, ref),
+              ),
+              const Divider(height: 1, indent: 52),
+              _SettingsTile(
+                icon: Icons.email_outlined,
+                label: 'Forgot / Reset Password',
+                onTap: () => context.push('/forgot-password'),
+              ),
+            ] else ...[
+              _SettingsTile(
+                icon: Icons.login,
+                label: 'Sign In for Online Features',
+                onTap: () => context.push('/login?returnTo=/profile'),
+              ),
+              const Divider(height: 1, indent: 52),
+              _SettingsTile(
+                icon: Icons.person_add_alt_outlined,
+                label: 'Create Online Account',
+                onTap: () => context.push('/register?returnTo=/profile'),
+              ),
+            ],
           ]),
 
           const SizedBox(height: 16),
@@ -185,24 +218,25 @@ class ProfileScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
-          // Logout
-          AppButton(
-            label: 'Sign Out',
-            icon: Icons.logout,
-            color: AppTheme.error,
-            onPressed: () async {
-              final ok = await showConfirmDialog(
-                context,
-                title: 'Sign Out',
-                message: 'Are you sure you want to sign out?',
-                confirmLabel: 'Sign Out',
-                confirmColor: AppTheme.error,
-              );
-              if (ok && context.mounted) {
-                await ref.read(authProvider.notifier).logout();
-              }
-            },
-          ),
+          if (hasRemoteSession)
+            AppButton(
+              label: 'Sign Out',
+              icon: Icons.logout,
+              color: AppTheme.error,
+              onPressed: () async {
+                final ok = await showConfirmDialog(
+                  context,
+                  title: 'Sign Out',
+                  message:
+                      'Sign out of your online account? Local finance data stays on this device.',
+                  confirmLabel: 'Sign Out',
+                  confirmColor: AppTheme.error,
+                );
+                if (ok && context.mounted) {
+                  await ref.read(authProvider.notifier).logout();
+                }
+              },
+            ),
 
           const SizedBox(height: 32),
         ]),

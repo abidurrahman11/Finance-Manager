@@ -195,6 +195,19 @@ class ExpenseRepository {
     return _getExpenseById(id);
   }
 
+  /// Updates an expense record.
+  ///
+  /// [expenseGroupId] uses a sentinel pattern to distinguish between
+  /// "caller wants to explicitly set group to null" vs "caller did not
+  /// supply a value and the existing group membership should be preserved":
+  ///
+  ///   • Pass a non-null int  → set expense_group_id to that value.
+  ///   • Pass null explicitly → PRESERVE the existing expense_group_id
+  ///     (i.e. do NOT overwrite it). This is the safe default so that
+  ///     editing title/amount/category/notes never accidentally unlinks
+  ///     an expense from its group.
+  ///
+  /// To explicitly remove a group association, pass [clearGroupId: true].
   Future<ExpenseModel> updateExpense(
     int id, {
     required String title,
@@ -203,29 +216,59 @@ class ExpenseRepository {
     DateTime? expenseDate,
     String? notes,
     int? expenseGroupId,
+    bool clearGroupId = false,
     String? imagePath,
   }) async {
     final now = DateTime.now().toIso8601String();
-    await _db.customUpdate(
-      '''
-      UPDATE expenses
-      SET title = ?, amount = ?, category = ?, expense_date = ?, notes = ?,
-          image_url = COALESCE(?, image_url), expense_group_id = ?,
-          updated_at = ?
-      WHERE id = ?
-      ''',
-      variables: [
-        Variable.withString(title),
-        Variable.withReal(amount),
-        Variable.withString(category),
-        Variable.withString((expenseDate ?? DateTime.now()).toIso8601String()),
-        Variable(notes),
-        Variable(imagePath),
-        Variable(expenseGroupId),
-        Variable.withString(now),
-        Variable.withInt(id),
-      ],
-    );
+
+    if (clearGroupId || expenseGroupId != null) {
+      // Caller explicitly wants to set (or clear) the group association.
+      await _db.customUpdate(
+        '''
+        UPDATE expenses
+        SET title = ?, amount = ?, category = ?, expense_date = ?, notes = ?,
+            image_url = COALESCE(?, image_url), expense_group_id = ?,
+            updated_at = ?
+        WHERE id = ?
+        ''',
+        variables: [
+          Variable.withString(title),
+          Variable.withReal(amount),
+          Variable.withString(category),
+          Variable.withString(
+              (expenseDate ?? DateTime.now()).toIso8601String()),
+          Variable(notes),
+          Variable(imagePath),
+          clearGroupId ? const Variable(null) : Variable(expenseGroupId),
+          Variable.withString(now),
+          Variable.withInt(id),
+        ],
+      );
+    } else {
+      // expenseGroupId was not supplied — preserve the existing DB value.
+      // Do NOT include expense_group_id in the SET clause at all.
+      await _db.customUpdate(
+        '''
+        UPDATE expenses
+        SET title = ?, amount = ?, category = ?, expense_date = ?, notes = ?,
+            image_url = COALESCE(?, image_url),
+            updated_at = ?
+        WHERE id = ?
+        ''',
+        variables: [
+          Variable.withString(title),
+          Variable.withReal(amount),
+          Variable.withString(category),
+          Variable.withString(
+              (expenseDate ?? DateTime.now()).toIso8601String()),
+          Variable(notes),
+          Variable(imagePath),
+          Variable.withString(now),
+          Variable.withInt(id),
+        ],
+      );
+    }
+
     return _getExpenseById(id);
   }
 

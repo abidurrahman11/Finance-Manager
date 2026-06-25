@@ -20,6 +20,9 @@ class AuthState {
     this.isLoading = false,
   });
 
+  bool get hasRemoteSession =>
+      user != null && user!.email != AuthRepository.localUser.email;
+
   AuthState copyWith({
     AuthStatus? status,
     UserModel? user,
@@ -50,13 +53,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         state = AuthState(status: AuthStatus.authenticated, user: user);
       } catch (_) {
         state = AuthState(
-          status: AuthStatus.authenticated,
+          status: AuthStatus.unauthenticated,
           user: AuthRepository.localUser,
         );
       }
     } else {
       state = AuthState(
-        status: AuthStatus.authenticated,
+        status: AuthStatus.unauthenticated,
         user: AuthRepository.localUser,
       );
     }
@@ -72,10 +75,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        status: AuthStatus.authenticated,
+        status: AuthStatus.unauthenticated,
         user: AuthRepository.localUser,
         error: e.toString(),
       );
+      return false;
+    }
+  }
+
+  Future<void> refreshUser() async {
+    try {
+      final user = await _repo.getMe();
+      state = state.copyWith(user: user, status: AuthStatus.authenticated);
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        user: AuthRepository.localUser,
+      );
+    }
+  }
+
+  Future<bool> resendVerification(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repo.resendVerification(email);
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
@@ -95,7 +122,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _repo.logout();
     state = AuthState(
-      status: AuthStatus.authenticated,
+      status: AuthStatus.unauthenticated,
       user: AuthRepository.localUser,
     );
   }

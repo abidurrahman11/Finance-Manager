@@ -8,6 +8,7 @@ import '../../providers/expense_provider.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/category_utils.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -251,10 +252,12 @@ class DashboardScreen extends ConsumerWidget {
                                   : 0.0;
                               final color = AppTheme.categoryColors[
                                   idx % AppTheme.categoryColors.length];
+                              final catIcon = CategoryUtils.getExpenseIcon(cat.category);
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: _CategoryRow(
                                     category: cat.category,
+                                    icon: catIcon,
                                     amount: cat.totalSpent,
                                     percent: percent,
                                     color: color),
@@ -323,6 +326,7 @@ class DashboardScreen extends ConsumerWidget {
                                   expenses.expenses.take(5).toList()[i];
                               final color = AppTheme.categoryColors[
                                   i % AppTheme.categoryColors.length];
+                              final icon = CategoryUtils.getExpenseIcon(exp.category);
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 20, vertical: 4),
@@ -339,7 +343,7 @@ class DashboardScreen extends ConsumerWidget {
                                         color: color.withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(10),
                                       ),
-                                      child: Icon(Icons.shopping_bag_outlined,
+                                      child: Icon(icon,
                                           color: color, size: 18),
                                     ),
                                     const SizedBox(width: 12),
@@ -349,6 +353,8 @@ class DashboardScreen extends ConsumerWidget {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(exp.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.w500,
                                                   color: AppTheme.textPrimary,
@@ -453,11 +459,13 @@ class _QuickAction extends StatelessWidget {
 
 class _CategoryRow extends StatelessWidget {
   final String category;
+  final IconData icon;
   final double amount;
   final double percent;
   final Color color;
   const _CategoryRow(
       {required this.category,
+      required this.icon,
       required this.amount,
       required this.percent,
       required this.color});
@@ -475,7 +483,7 @@ class _CategoryRow extends StatelessWidget {
           decoration: BoxDecoration(
               color: color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8)),
-          child: Icon(Icons.circle, color: color, size: 10),
+          child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(width: 12),
         Expanded(

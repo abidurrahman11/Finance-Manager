@@ -154,7 +154,8 @@ class _BillsScreenState extends ConsumerState<BillsScreen>
                       dueDay: dueDay,
                       notes: notesCtrl.text.trim().isNotEmpty
                           ? notesCtrl.text.trim()
-                          : null);
+                          : null,
+                      remote: bill.isRemote);
                 } else {
                   await ref.read(billsProvider.notifier).create(
                       title: titleCtrl.text.trim(),
@@ -320,9 +321,26 @@ class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
       BuildContext context, BillPaymentStatus payment) async {
     final newStatus = payment.isPaid ? 'pending' : 'paid';
     try {
-      final repo = BillRepository();
-      await repo.markPayment(payment.billId,
-          month: _monthKey, status: newStatus);
+      if (payment.isRemote) {
+        if (newStatus == 'paid') {
+          await ref
+              .read(remoteBillRepositoryProvider)
+              .markAsPaid(payment.billId, _monthKey);
+        } else {
+          // Backend might not support unpaying via markAsPaid if it only sets status='paid'
+          // But usually we would have a way to reset it.
+          // For now, let's assume if it's remote, we can't easily 'unpay' unless there's an API.
+          // The current RemoteBillRepository only has markAsPaid.
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Cannot undo remote payment from this screen'),
+              backgroundColor: AppTheme.warning));
+          return;
+        }
+      } else {
+        final repo = ref.read(billRepositoryProvider);
+        await repo.markPayment(payment.billId,
+            month: _monthKey, status: newStatus);
+      }
       ref.invalidate(billPaymentsProvider(_monthKey));
     } catch (e) {
       if (context.mounted) {
@@ -399,7 +417,9 @@ class _ManageBillsTab extends ConsumerWidget {
                           title: 'Delete Bill',
                           message: 'Delete "${list[i].title}"?');
                       if (ok) {
-                        ref.read(billsProvider.notifier).delete(list[i].id);
+                        ref
+                            .read(billsProvider.notifier)
+                            .delete(list[i].id, remote: list[i].isRemote);
                       }
                     },
                   ),

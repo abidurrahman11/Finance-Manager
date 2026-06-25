@@ -8,6 +8,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/plan_model.dart';
 import '../../../data/repositories/plan_repository.dart';
+import '../../../data/repositories/remote_plan_repository.dart';
 
 class PlanDetailScreen extends ConsumerWidget {
   final PlanModel plan;
@@ -15,13 +16,13 @@ class PlanDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(planDetailProvider(plan.id));
+    final detailAsync = ref.watch(planDetailProvider(plan));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(plan.title),
         actions: [
-          if (plan.isOwner)
+          if (plan.isRemote && plan.isOwner)
             IconButton(
               icon: const Icon(Icons.people_outline),
               onPressed: () => _showCollaborators(context, ref),
@@ -40,10 +41,12 @@ class PlanDetailScreen extends ConsumerWidget {
         data: (planWithItems) => _PlanDetailBody(
           planWithItems: planWithItems,
           canEdit: plan.canEdit,
-          onRefresh: () => ref.invalidate(planDetailProvider(plan.id)),
+          onRefresh: () => ref.invalidate(planDetailProvider(plan)),
           onDeleteItem: (item) => _deleteItem(context, ref, item),
-          onUpdateSpent: (item) => _showUpdateSpent(context, ref, planWithItems.plan, item),
-          onEditItem: (item) => _showEditItem(context, ref, planWithItems.plan, item),
+          onUpdateSpent: (item) =>
+              _showUpdateSpent(context, ref, planWithItems.plan, item),
+          onEditItem: (item) =>
+              _showEditItem(context, ref, planWithItems.plan, item),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -59,13 +62,16 @@ class PlanDetailScreen extends ConsumerWidget {
         title: 'Remove Category', message: 'Remove "${item.category}"?');
     if (ok) {
       try {
-        await PlanRepository().deleteItem(plan.id, item.id);
-        ref.invalidate(planDetailProvider(plan.id));
+        if (plan.isRemote) {
+          await RemotePlanRepository().deleteItem(plan.id, item.id);
+        } else {
+          await PlanRepository().deleteItem(plan.id, item.id);
+        }
+        ref.invalidate(planDetailProvider(plan));
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: AppTheme.error));
+              content: Text(e.toString()), backgroundColor: AppTheme.error));
         }
       }
     }
@@ -108,8 +114,7 @@ class PlanDetailScreen extends ConsumerWidget {
                   dropdownColor: AppTheme.surfaceVariant,
                   style: const TextStyle(color: AppTheme.textPrimary),
                   items: AppConstants.expenseCategories
-                      .map((c) =>
-                          DropdownMenuItem(value: c, child: Text(c)))
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setLocal(() => category = v);
@@ -134,9 +139,7 @@ class PlanDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             AppTextField(
-                label: 'Notes (optional)',
-                controller: notesCtrl,
-                maxLines: 2),
+                label: 'Notes (optional)', controller: notesCtrl, maxLines: 2),
             const SizedBox(height: 20),
             AppButton(
               label: 'Add Category',
@@ -144,13 +147,22 @@ class PlanDetailScreen extends ConsumerWidget {
               onPressed: () async {
                 if (amountCtrl.text.trim().isEmpty) return;
                 try {
-                  await PlanRepository().addItem(plan.id,
-                      category: category,
-                      expectedAmount: double.parse(amountCtrl.text),
-                      notes: notesCtrl.text.trim().isNotEmpty
-                          ? notesCtrl.text.trim()
-                          : null);
-                  ref.invalidate(planDetailProvider(plan.id));
+                  if (plan.isRemote) {
+                    await RemotePlanRepository().addItem(plan.id,
+                        category: category,
+                        expectedAmount: double.parse(amountCtrl.text),
+                        notes: notesCtrl.text.trim().isNotEmpty
+                            ? notesCtrl.text.trim()
+                            : null);
+                  } else {
+                    await PlanRepository().addItem(plan.id,
+                        category: category,
+                        expectedAmount: double.parse(amountCtrl.text),
+                        notes: notesCtrl.text.trim().isNotEmpty
+                            ? notesCtrl.text.trim()
+                            : null);
+                  }
+                  ref.invalidate(planDetailProvider(plan));
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
                   if (ctx.mounted) {
@@ -167,8 +179,8 @@ class PlanDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditItem(BuildContext context, WidgetRef ref, PlanModel p,
-      PlanItemModel item) {
+  void _showEditItem(
+      BuildContext context, WidgetRef ref, PlanModel p, PlanItemModel item) {
     String category = item.category;
     final amountCtrl =
         TextEditingController(text: item.expectedAmount.toString());
@@ -206,8 +218,7 @@ class PlanDetailScreen extends ConsumerWidget {
                   dropdownColor: AppTheme.surfaceVariant,
                   style: const TextStyle(color: AppTheme.textPrimary),
                   items: AppConstants.expenseCategories
-                      .map((c) =>
-                          DropdownMenuItem(value: c, child: Text(c)))
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setLocal(() => category = v);
@@ -222,21 +233,29 @@ class PlanDetailScreen extends ConsumerWidget {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true)),
             const SizedBox(height: 12),
-            AppTextField(
-                label: 'Notes', controller: notesCtrl, maxLines: 2),
+            AppTextField(label: 'Notes', controller: notesCtrl, maxLines: 2),
             const SizedBox(height: 20),
             AppButton(
               label: 'Save Changes',
               icon: Icons.save,
               onPressed: () async {
                 try {
-                  await PlanRepository().updateItem(p.id, item.id,
-                      category: category,
-                      expectedAmount: double.parse(amountCtrl.text),
-                      notes: notesCtrl.text.trim().isNotEmpty
-                          ? notesCtrl.text.trim()
-                          : null);
-                  ref.invalidate(planDetailProvider(p.id));
+                  if (p.isRemote) {
+                    await RemotePlanRepository().updateItem(p.id, item.id,
+                        category: category,
+                        expectedAmount: double.parse(amountCtrl.text),
+                        notes: notesCtrl.text.trim().isNotEmpty
+                            ? notesCtrl.text.trim()
+                            : null);
+                  } else {
+                    await PlanRepository().updateItem(p.id, item.id,
+                        category: category,
+                        expectedAmount: double.parse(amountCtrl.text),
+                        notes: notesCtrl.text.trim().isNotEmpty
+                            ? notesCtrl.text.trim()
+                            : null);
+                  }
+                  ref.invalidate(planDetailProvider(p));
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
                   if (ctx.mounted) {
@@ -253,8 +272,8 @@ class PlanDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _showUpdateSpent(BuildContext context, WidgetRef ref, PlanModel p,
-      PlanItemModel item) {
+  void _showUpdateSpent(
+      BuildContext context, WidgetRef ref, PlanModel p, PlanItemModel item) {
     final amountCtrl = TextEditingController();
     String operation = 'add';
 
@@ -280,8 +299,8 @@ class PlanDetailScreen extends ConsumerWidget {
             const SizedBox(height: 6),
             Text(
               'Current: ${CurrencyFormatter.format(item.spentAmount)} / ${CurrencyFormatter.format(item.expectedAmount)}',
-              style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 13),
+              style:
+                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 16),
             Row(children: [
@@ -376,10 +395,16 @@ class PlanDetailScreen extends ConsumerWidget {
               onPressed: () async {
                 if (amountCtrl.text.trim().isEmpty) return;
                 try {
-                  await PlanRepository().updateSpent(p.id, item.id,
-                      amount: double.parse(amountCtrl.text),
-                      operation: operation);
-                  ref.invalidate(planDetailProvider(p.id));
+                  if (p.isRemote) {
+                    await RemotePlanRepository().updateSpent(p.id, item.id,
+                        amount: double.parse(amountCtrl.text),
+                        operation: operation);
+                  } else {
+                    await PlanRepository().updateSpent(p.id, item.id,
+                        amount: double.parse(amountCtrl.text),
+                        operation: operation);
+                  }
+                  ref.invalidate(planDetailProvider(p));
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
                   if (ctx.mounted) {
@@ -547,8 +572,7 @@ class _PlanDetailBody extends StatelessWidget {
           // Items section header
           SliverToBoxAdapter(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
               child: Text(
                 items.isEmpty ? 'No categories yet' : 'Budget Categories',
                 style: const TextStyle(
@@ -564,11 +588,11 @@ class _PlanDetailBody extends StatelessWidget {
             delegate: SliverChildBuilderDelegate(
               (context, i) {
                 final item = items[i];
-                final color = AppTheme
-                    .categoryColors[i % AppTheme.categoryColors.length];
+                final color =
+                    AppTheme.categoryColors[i % AppTheme.categoryColors.length];
                 return Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: _PlanItemCard(
                     item: item,
                     color: color,
@@ -619,9 +643,8 @@ class _PlanItemCard extends StatelessWidget {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isOver
-              ? AppTheme.error.withValues(alpha: 0.3)
-              : AppTheme.divider,
+          color:
+              isOver ? AppTheme.error.withValues(alpha: 0.3) : AppTheme.divider,
         ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -636,27 +659,26 @@ class _PlanItemCard extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.category,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                          fontSize: 14)),
-                  if (item.notes != null && item.notes!.isNotEmpty)
-                    Text(item.notes!,
-                        style: const TextStyle(
-                            color: AppTheme.textSecondary, fontSize: 11)),
-                ]),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item.category,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                      fontSize: 14)),
+              if (item.notes != null && item.notes!.isNotEmpty)
+                Text(item.notes!,
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 11)),
+            ]),
           ),
           if (canEdit)
             Row(children: [
               GestureDetector(
                 onTap: onUpdateSpent,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                   decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6)),
@@ -689,8 +711,7 @@ class _PlanItemCard extends StatelessWidget {
           ),
           Text(
             'of ${CurrencyFormatter.format(item.expectedAmount)}',
-            style: const TextStyle(
-                color: AppTheme.textSecondary, fontSize: 12),
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
         ]),
         const SizedBox(height: 6),
@@ -742,8 +763,7 @@ class _CollaboratorsSheet extends ConsumerStatefulWidget {
       _CollaboratorsSheetState();
 }
 
-class _CollaboratorsSheetState
-    extends ConsumerState<_CollaboratorsSheet> {
+class _CollaboratorsSheetState extends ConsumerState<_CollaboratorsSheet> {
   List<CollaboratorModel> _collaborators = [];
   bool _loading = true;
   final _emailCtrl = TextEditingController();
@@ -757,8 +777,7 @@ class _CollaboratorsSheetState
 
   Future<void> _load() async {
     try {
-      final list =
-          await PlanRepository().getCollaborators(widget.planId);
+      final list = await RemotePlanRepository().getCollaborators(widget.planId);
       if (mounted) {
         setState(() {
           _collaborators = list;
@@ -773,7 +792,7 @@ class _CollaboratorsSheetState
   Future<void> _add() async {
     if (_emailCtrl.text.trim().isEmpty) return;
     try {
-      await PlanRepository()
+      await RemotePlanRepository()
           .addCollaborator(widget.planId, _emailCtrl.text.trim(), _role);
       _emailCtrl.clear();
       _load();
@@ -785,21 +804,19 @@ class _CollaboratorsSheetState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppTheme.error));
+            content: Text(e.toString()), backgroundColor: AppTheme.error));
       }
     }
   }
 
   Future<void> _remove(int userId) async {
     try {
-      await PlanRepository().removeCollaborator(widget.planId, userId);
+      await RemotePlanRepository().removeCollaborator(widget.planId, userId);
       _load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppTheme.error));
+            content: Text(e.toString()), backgroundColor: AppTheme.error));
       }
     }
   }
@@ -862,10 +879,10 @@ class _CollaboratorsSheetState
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
-                        backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
+                        backgroundColor:
+                            AppTheme.primary.withValues(alpha: 0.2),
                         child: Text(c.name[0].toUpperCase(),
-                            style:
-                                const TextStyle(color: AppTheme.primary))),
+                            style: const TextStyle(color: AppTheme.primary))),
                     title: Text(c.name,
                         style: const TextStyle(color: AppTheme.textPrimary)),
                     subtitle: Text(c.email,

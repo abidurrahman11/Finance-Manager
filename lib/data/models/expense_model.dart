@@ -9,6 +9,7 @@ class ExpenseModel {
   final String? imageUrl;
   final int? expenseGroupId;
   final DateTime createdAt;
+  final bool isRemote;
 
   ExpenseModel({
     required this.id,
@@ -21,6 +22,7 @@ class ExpenseModel {
     this.imageUrl,
     this.expenseGroupId,
     required this.createdAt,
+    this.isRemote = false,
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class ExpenseModel {
       imageUrl: json['image_url'],
       expenseGroupId: json['expense_group_id'],
       createdAt: DateTime.parse(json['created_at']),
+      isRemote: json['is_remote'] ?? false,
     );
   }
 }
@@ -48,6 +51,7 @@ class ExpenseGroupModel {
   final DateTime? endDate;
   final String role;
   final DateTime createdAt;
+  final bool isRemote;
 
   ExpenseGroupModel({
     required this.id,
@@ -58,6 +62,7 @@ class ExpenseGroupModel {
     this.endDate,
     required this.role,
     required this.createdAt,
+    this.isRemote = false,
   });
 
   factory ExpenseGroupModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +77,7 @@ class ExpenseGroupModel {
           json['end_date'] != null ? DateTime.parse(json['end_date']) : null,
       role: json['role'] ?? 'owner',
       createdAt: DateTime.parse(json['created_at']),
+      isRemote: json['is_remote'] ?? true,
     );
   }
 
@@ -95,13 +101,17 @@ class PaginatedExpenses {
   });
 
   factory PaginatedExpenses.fromJson(Map<String, dynamic> json) {
+    final bool isRemote = json['is_remote'] ?? false;
     return PaginatedExpenses(
       page: json['page'],
       limit: json['limit'],
       total: json['total'],
       totalPages: json['totalPages'],
       data: (json['data'] as List)
-          .map((e) => ExpenseModel.fromJson(e))
+          .map((e) => ExpenseModel.fromJson({
+                ...Map<String, dynamic>.from(e as Map),
+                'is_remote': isRemote,
+              }))
           .toList(),
     );
   }

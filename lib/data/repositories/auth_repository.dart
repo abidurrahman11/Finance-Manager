@@ -29,10 +29,7 @@ class AuthRepository {
         'password': password,
       });
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data['message'] ?? 'Registration failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw _apiException(e, 'Registration failed');
     }
   }
 
@@ -54,10 +51,7 @@ class AuthRepository {
         value: response.data['refreshToken'],
       );
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data['message'] ?? 'Login failed',
-        statusCode: e.response?.statusCode,
-      );
+      throw _apiException(e, 'Login failed');
     }
   }
 
@@ -78,10 +72,7 @@ class AuthRepository {
       final response = await _dio.get('/auth/me');
       return UserModel.fromJson(response.data);
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data['message'] ?? 'Failed to fetch user',
-        statusCode: e.response?.statusCode,
-      );
+      throw _apiException(e, 'Failed to fetch user');
     }
   }
 
@@ -96,10 +87,7 @@ class AuthRepository {
         'newPassword': newPassword,
       });
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data['message'] ?? 'Failed to change password',
-        statusCode: e.response?.statusCode,
-      );
+      throw _apiException(e, 'Failed to change password');
     }
   }
 
@@ -107,10 +95,7 @@ class AuthRepository {
     try {
       await _dio.post('/auth/forgot-password', data: {'email': email});
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data['message'] ?? 'Failed to send reset email',
-        statusCode: e.response?.statusCode,
-      );
+      throw _apiException(e, 'Failed to send reset email');
     }
   }
 
@@ -118,15 +103,45 @@ class AuthRepository {
     try {
       await _dio.post('/auth/resend-verification', data: {'email': email});
     } on DioException catch (e) {
-      throw ApiException(
-        e.response?.data['message'] ?? 'Failed to resend verification',
-        statusCode: e.response?.statusCode,
-      );
+      throw _apiException(e, 'Failed to resend verification');
     }
   }
 
   Future<bool> isLoggedIn() async {
     final token = await _storage.read(key: AppConstants.accessTokenKey);
     return token != null;
+  }
+
+  ApiException _apiException(DioException e, String fallback) {
+    final response = e.response;
+    final data = response?.data;
+    
+    // Check if the server returned a specific error message
+    if (data is Map && data['message'] != null) {
+      return ApiException(data['message'].toString(), statusCode: response?.statusCode);
+    } else if (data is String && data.isNotEmpty) {
+      return ApiException(data, statusCode: response?.statusCode);
+    }
+
+    // Handle specific status codes
+    if (response?.statusCode == 401) {
+      return ApiException('Invalid email or password.', statusCode: 401);
+    }
+    if (response?.statusCode == 403) {
+      return ApiException('Account access forbidden.', statusCode: 403);
+    }
+
+    // Handle connection issues
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.sendTimeout) {
+      return ApiException(
+        'Online connection is unavailable. You can keep using local features offline.',
+        statusCode: response?.statusCode,
+      );
+    }
+
+    return ApiException(fallback, statusCode: response?.statusCode);
   }
 }

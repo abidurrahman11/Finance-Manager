@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../../data/repositories/auth_repository.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../../core/constants/app_theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  final String? returnTo;
+
+  const LoginScreen({super.key, this.returnTo});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -38,6 +41,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           backgroundColor: AppTheme.error,
         ),
       );
+    } else if (success && mounted) {
+      final user = ref.read(authProvider).user;
+      if (user != null && !user.isVerified && user.email != AuthRepository.localUser.email) {
+        context.go('/verify-email');
+      } else {
+        context.go(widget.returnTo ?? '/dashboard');
+      }
     }
   }
 
@@ -122,6 +132,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   isLoading: isLoading,
                   icon: Icons.login,
                 ),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.go('/dashboard'),
+                    child: const Text('Continue offline'),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -129,7 +146,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const Text("Don't have an account?",
                         style: TextStyle(color: AppTheme.textSecondary)),
                     TextButton(
-                      onPressed: () => context.go('/register'),
+                      onPressed: () => context.go(
+                        widget.returnTo == null
+                            ? '/register'
+                            : '/register?returnTo=${Uri.encodeComponent(widget.returnTo!)}',
+                      ),
                       child: const Text('Sign Up'),
                     ),
                   ],

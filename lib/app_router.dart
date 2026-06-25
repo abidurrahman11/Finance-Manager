@@ -5,13 +5,18 @@ import 'presentation/providers/auth_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/auth/register_screen.dart';
 import 'presentation/screens/auth/forgot_password_screen.dart';
+import 'presentation/screens/auth/verify_email_screen.dart';
 import 'presentation/screens/dashboard/dashboard_screen.dart';
-import 'presentation/screens/expenses/expenses_screen.dart';
+import 'presentation/screens/expenses/expenses_hub_screen.dart';
 import 'presentation/screens/expenses/expense_form_screen.dart';
 import 'presentation/screens/expenses/expense_groups_screen.dart';
-import 'presentation/screens/incomes/incomes_screen.dart';
+import 'presentation/screens/expenses/create_group_screen.dart';
+import 'presentation/screens/expenses/group_detail_screen.dart';
+import 'presentation/screens/incomes/incomes_hub_screen.dart';
 import 'presentation/screens/incomes/income_form_screen.dart';
 import 'presentation/screens/incomes/income_groups_screen.dart';
+import 'presentation/screens/incomes/create_income_group_screen.dart';
+import 'presentation/screens/incomes/income_group_detail_screen.dart';
 import 'presentation/screens/bills/bills_screen.dart';
 import 'presentation/screens/plans/plans_screen.dart';
 import 'presentation/screens/plans/plan_detail_screen.dart';
@@ -22,39 +27,59 @@ import 'data/models/income_model.dart';
 import 'data/models/plan_model.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  ref.watch(authProvider);
-
   return GoRouter(
     initialLocation: '/dashboard',
-    redirect: (_, __) => null,
     routes: [
-      // Auth routes (outside shell)
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      // ── Auth routes ───────────────────────────────────────────────────────
       GoRoute(
-          path: '/forgot-password',
-          builder: (_, __) => const ForgotPasswordScreen()),
+        path: '/login',
+        builder: (_, state) => LoginScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (_, state) => RegisterScreen(
+          returnTo: state.uri.queryParameters['returnTo'],
+        ),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, __) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (_, __) => const VerifyEmailScreen(),
+      ),
 
-      // Main shell with bottom nav. 6 tabs
+      // ── Main shell with bottom nav ─────────────────────────────────────────
       ShellRoute(
         builder: (context, state, child) =>
             MainShell(location: state.matchedLocation, child: child),
         routes: [
+          // Dashboard
           GoRoute(
             path: '/dashboard',
             builder: (_, __) => const DashboardScreen(),
           ),
+
+          // ── Expenses ───────────────────────────────────────────────────────
           GoRoute(
             path: '/expenses',
-            builder: (_, __) => const ExpensesScreen(),
+            builder: (_, __) => const ExpensesHubScreen(),
             routes: [
+              // Add new expense — extra is ExpenseGroupModel? or absent
               GoRoute(
                 path: 'new',
                 builder: (_, state) {
-                  final groupId = state.extra as int?;
-                  return ExpenseFormScreen(groupId: groupId);
+                  final group = state.extra is ExpenseGroupModel
+                      ? state.extra as ExpenseGroupModel
+                      : null;
+                  return ExpenseFormScreen(group: group);
                 },
               ),
+
+              // Edit existing expense
               GoRoute(
                 path: 'edit',
                 builder: (_, state) {
@@ -62,23 +87,62 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return ExpenseFormScreen(expense: expense);
                 },
               ),
+
+              // ── Group list screens ────────────────────────────────────────
+              // These are flat siblings — no parent wrapper — so there is no
+              // parent-level redirect that can intercept child navigation.
+
+              // Offline groups list
               GoRoute(
-                path: 'groups',
-                builder: (_, __) => const ExpenseGroupsScreen(),
+                path: 'groups/offline',
+                builder: (_, __) =>
+                    const ExpenseGroupsScreen(isRemote: false),
+              ),
+
+              // Online (collaborative) groups list
+              GoRoute(
+                path: 'groups/online',
+                builder: (_, __) =>
+                    const ExpenseGroupsScreen(isRemote: true),
+              ),
+
+              // Create group — shared entry point for both types
+              GoRoute(
+                path: 'groups/new',
+                builder: (_, __) => const CreateGroupScreen(),
+              ),
+
+              // ── Group detail ──────────────────────────────────────────────
+              // Uses a distinct prefix 'groups/detail' so the path never
+              // collides with the list routes above.
+              // extra MUST be the full ExpenseGroupModel (passed by GroupCard).
+              GoRoute(
+                path: 'groups/detail/:id',
+                builder: (_, state) {
+                  final group = state.extra as ExpenseGroupModel;
+                  return GroupDetailScreen(group: group);
+                },
               ),
             ],
           ),
+
+          // ── Incomes ────────────────────────────────────────────────────────
           GoRoute(
             path: '/incomes',
-            builder: (_, __) => const IncomesScreen(),
+            builder: (_, __) => const IncomesHubScreen(),
             routes: [
+              // Add new income — extra is IncomeGroupModel? or absent
               GoRoute(
                 path: 'new',
                 builder: (_, state) {
-                  final groupId = state.extra as int?;
-                  return IncomeFormScreen(groupId: groupId);
+                  final group = state.extra is IncomeGroupModel
+                      ? state.extra as IncomeGroupModel
+                      : null;
+                  return IncomeFormScreen(group: group);
                 },
               ),
+
+              // Edit existing income
               GoRoute(
                 path: 'edit',
                 builder: (_, state) {
@@ -86,16 +150,50 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return IncomeFormScreen(income: income);
                 },
               ),
+
+              // ── Group list screens ────────────────────────────────────────
+
+              // Offline groups list
               GoRoute(
-                path: 'groups',
-                builder: (_, __) => const IncomeGroupsScreen(),
+                path: 'groups/offline',
+                builder: (_, __) =>
+                    const IncomeGroupsScreen(isRemote: false),
+              ),
+
+              // Online (collaborative) groups list
+              GoRoute(
+                path: 'groups/online',
+                builder: (_, __) =>
+                    const IncomeGroupsScreen(isRemote: true),
+              ),
+
+              // Create income group — shared entry point for both types
+              GoRoute(
+                path: 'groups/new',
+                builder: (_, __) => const CreateIncomeGroupScreen(),
+              ),
+
+              // ── Group detail ──────────────────────────────────────────────
+              // Uses a distinct prefix 'groups/detail' so the path never
+              // collides with the list routes above.
+              // extra MUST be the full IncomeGroupModel (passed by IncomeGroupCard).
+              GoRoute(
+                path: 'groups/detail/:id',
+                builder: (_, state) {
+                  final group = state.extra as IncomeGroupModel;
+                  return IncomeGroupDetailScreen(group: group);
+                },
               ),
             ],
           ),
+
+          // ── Bills ──────────────────────────────────────────────────────────
           GoRoute(
             path: '/bills',
             builder: (_, __) => const BillsScreen(),
           ),
+
+          // ── Plans ──────────────────────────────────────────────────────────
           GoRoute(
             path: '/plans',
             builder: (_, __) => const PlansScreen(),
@@ -109,10 +207,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+
+          // ── Analytics ──────────────────────────────────────────────────────
           GoRoute(
             path: '/analytics',
             builder: (_, __) => const AnalyticsScreen(),
           ),
+
+          // ── Profile ────────────────────────────────────────────────────────
           GoRoute(
             path: '/profile',
             builder: (_, __) => const ProfileScreen(),
@@ -122,6 +224,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+// ─── Main shell ───────────────────────────────────────────────────────────────
 
 class MainShell extends StatelessWidget {
   final Widget child;
@@ -136,13 +240,12 @@ class MainShell extends StatelessWidget {
     if (location.startsWith('/bills')) return 3;
     if (location.startsWith('/plans')) return 4;
     if (location.startsWith('/analytics')) return 5;
-    return 0; // default to home for profile and other routes
+    return 0;
   }
 
   @override
   Widget build(BuildContext context) {
     final idx = _getIndex();
-    // Hide bottom nav on profile screen
     final showNav = !location.startsWith('/profile');
 
     return Scaffold(
@@ -167,33 +270,41 @@ class MainShell extends StatelessWidget {
                 }
               },
               backgroundColor: Theme.of(context).colorScheme.surface,
-              indicatorColor:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+              indicatorColor: Theme.of(context)
+                  .colorScheme
+                  .primary
+                  .withValues(alpha: 0.2),
               destinations: const [
                 NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    selectedIcon: Icon(Icons.home),
-                    label: 'Home'),
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'Home',
+                ),
                 NavigationDestination(
-                    icon: Icon(Icons.arrow_upward_outlined),
-                    selectedIcon: Icon(Icons.arrow_upward),
-                    label: 'Expenses'),
+                  icon: Icon(Icons.arrow_upward_outlined),
+                  selectedIcon: Icon(Icons.arrow_upward),
+                  label: 'Expenses',
+                ),
                 NavigationDestination(
-                    icon: Icon(Icons.arrow_downward_outlined),
-                    selectedIcon: Icon(Icons.arrow_downward),
-                    label: 'Income'),
+                  icon: Icon(Icons.arrow_downward_outlined),
+                  selectedIcon: Icon(Icons.arrow_downward),
+                  label: 'Income',
+                ),
                 NavigationDestination(
-                    icon: Icon(Icons.receipt_long_outlined),
-                    selectedIcon: Icon(Icons.receipt_long),
-                    label: 'Bills'),
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: 'Bills',
+                ),
                 NavigationDestination(
-                    icon: Icon(Icons.flag_outlined),
-                    selectedIcon: Icon(Icons.flag),
-                    label: 'Plans'),
+                  icon: Icon(Icons.flag_outlined),
+                  selectedIcon: Icon(Icons.flag),
+                  label: 'Plans',
+                ),
                 NavigationDestination(
-                    icon: Icon(Icons.bar_chart_outlined),
-                    selectedIcon: Icon(Icons.bar_chart),
-                    label: 'Analytics'),
+                  icon: Icon(Icons.bar_chart_outlined),
+                  selectedIcon: Icon(Icons.bar_chart),
+                  label: 'Analytics',
+                ),
               ],
             )
           : null,
