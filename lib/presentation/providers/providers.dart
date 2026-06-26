@@ -1,11 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/income_model.dart';
-import '../../data/models/bill_model.dart';
 import '../../data/models/plan_model.dart';
 import '../../data/models/analytics_model.dart';
+import '../../data/models/reminder_model.dart';
 import '../../data/repositories/income_repository.dart';
-import '../../data/repositories/bill_repository.dart';
-import '../../data/repositories/remote_bill_repository.dart';
+import '../../data/repositories/reminder_repository.dart';
 import '../../data/repositories/plan_repository.dart';
 import '../../data/repositories/remote_plan_repository.dart';
 import '../../data/repositories/analytics_repository.dart';
@@ -18,8 +17,7 @@ import 'package:intl/intl.dart';
 final incomeRepositoryProvider = Provider((ref) => IncomeRepository());
 final remoteIncomeRepositoryProvider =
     Provider((ref) => RemoteIncomeRepository());
-final billRepositoryProvider = Provider((ref) => BillRepository());
-final remoteBillRepositoryProvider = Provider((ref) => RemoteBillRepository());
+final reminderRepositoryProvider = Provider((ref) => ReminderRepository());
 final planRepositoryProvider = Provider((ref) => PlanRepository());
 final remotePlanRepositoryProvider = Provider((ref) => RemotePlanRepository());
 final analyticsRepositoryProvider = Provider((ref) => AnalyticsRepository());
@@ -440,110 +438,168 @@ final remoteGroupIncomesProvider =
   return result.data;
 });
 
-// ─── Bills ───────────────────────────────────────────────────────────────────
-final billsProvider =
-    AsyncNotifierProvider<BillsNotifier, List<BillModel>>(BillsNotifier.new);
+// ─── Reminders ───────────────────────────────────────────────────────────────
+class RemindersState {
+  final List<ReminderModel> reminders;
+  final bool isLoading;
+  final String? error;
 
-class BillsNotifier extends AsyncNotifier<List<BillModel>> {
-  @override
-  Future<List<BillModel>> build() async {
-    final localBills = await ref.read(billRepositoryProvider).getBills();
-    final auth = ref.watch(authProvider);
-    if (auth.hasRemoteSession) {
-      try {
-        final remoteBills = await ref.read(remoteBillRepositoryProvider).getBills();
-        return [...localBills, ...remoteBills];
-      } catch (_) {
-        return localBills;
-      }
-    }
-    return localBills;
+  const RemindersState({
+    this.reminders = const [],
+    this.isLoading = false,
+    this.error,
+  });
+
+  RemindersState copyWith({
+    List<ReminderModel>? reminders,
+    bool? isLoading,
+    String? error,
+  }) =>
+      RemindersState(
+        reminders: reminders ?? this.reminders,
+        isLoading: isLoading ?? this.isLoading,
+        error: error,
+      );
+}
+
+class RemindersNotifier extends StateNotifier<RemindersState> {
+  final ReminderRepository _repo;
+
+  RemindersNotifier(this._repo) : super(const RemindersState()) {
+    _load();
   }
 
-  Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => build());
-  }
-
-  Future<bool> create(
-      {required String title,
-      required double amount,
-      required int dueDay,
-      String? notes,
-      bool remote = false}) async {
+  Future<void> _load() async {
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      BillModel bill;
-      if (remote) {
-        bill = await ref.read(remoteBillRepositoryProvider).createBill(
-            title: title, amount: amount, dueDay: dueDay, notes: notes);
-      } else {
-        bill = await ref.read(billRepositoryProvider).createBill(
-            title: title, amount: amount, dueDay: dueDay, notes: notes);
-      }
-      state = AsyncData([bill, ...state.valueOrNull ?? []]);
+      final reminders = await _repo.getReminders();
+      state = RemindersState(reminders: reminders);
+    } catch (e) {
+      state = RemindersState(error: e.toString());
+    }
+  }
+
+  Future<void> refresh() => _load();
+
+  Future<bool> create({
+    required String title,
+    String? notes,
+    required ReminderType type,
+    required ReminderPriority priority,
+    DateTime? dueDate,
+  }) async {
+    try {
+      final reminder = await _repo.createReminderDirect(
+        title: title,
+        notes: notes,
+        type: ReminderModel.typeToString(type),
+        priority: ReminderModel.priorityToString(priority),
+        dueDate: dueDate,
+      );
+      // Insert at front, then re-sort: pending first, then by created_at desc
+      final updated = [reminder, ...state.reminders];
+      _sortReminders(updated);
+      state = state.copyWith(reminders: updated);
       return true;
-    } catch (_) {
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
       return false;
     }
   }
 
-  Future<bool> updateBill(int id,
-      {required String title,
-      required double amount,
-      required int dueDay,
-      String? notes,
-      bool remote = false}) async {
+  Future<bool> update(
+    int id, {
+    required String title,
+    String? notes,
+    required ReminderType type,
+    required ReminderPriority priority,
+    required bool isCompleted,
+    DateTime? dueDate,
+    bool clearDueDate = false,
+  }) async {
     try {
-      BillModel updated;
-      if (remote) {
-        updated = await ref.read(remoteBillRepositoryProvider).updateBill(id,
-            title: title, amount: amount, dueDay: dueDay, notes: notes);
-      } else {
-        updated = await ref.read(billRepositoryProvider).updateBill(id,
-            title: title, amount: amount, dueDay: dueDay, notes: notes);
-      }
-      state = AsyncData(
-          state.valueOrNull?.map((b) => (b.id == id && b.isRemote == remote) ? updated : b).toList() ??
-              []);
+      final updated = await _repo.updateReminder(
+        id,
+        title: title,
+        notes: notes,
+        type: ReminderModel.typeToString(type),
+        priority: ReminderModel.priorityToString(priority),
+        isCompleted: isCompleted,
+        dueDate: dueDate,
+        clearDueDate: clearDueDate,
+      );
+      final list = state.reminders.map((r) => r.id == id ? updated : r).toList();
+      _sortReminders(list);
+      state = state.copyWith(reminders: list);
       return true;
-    } catch (_) {
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
       return false;
     }
   }
 
-  Future<bool> delete(int id, {bool remote = false}) async {
+  Future<bool> toggleCompleted(int id) async {
+    final reminder = state.reminders.firstWhere((r) => r.id == id);
+    final newCompleted = !reminder.isCompleted;
     try {
-      if (remote) {
-        await ref.read(remoteBillRepositoryProvider).deleteBill(id);
-      } else {
-        await ref.read(billRepositoryProvider).deleteBill(id);
-      }
-      state =
-          AsyncData(state.valueOrNull?.where((b) => !(b.id == id && b.isRemote == remote)).toList() ?? []);
+      await _repo.toggleCompleted(id, isCompleted: newCompleted);
+      final list = state.reminders
+          .map((r) => r.id == id ? r.copyWith(isCompleted: newCompleted) : r)
+          .toList();
+      _sortReminders(list);
+      state = state.copyWith(reminders: list);
       return true;
-    } catch (_) {
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
       return false;
+    }
+  }
+
+  Future<bool> delete(int id) async {
+    try {
+      await _repo.deleteReminder(id);
+      state = state.copyWith(
+        reminders: state.reminders.where((r) => r.id != id).toList(),
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  void _sortReminders(List<ReminderModel> list) {
+    list.sort((a, b) {
+      // Pending before completed
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+      // Among pending: high priority first
+      if (!a.isCompleted) {
+        final pa = _priorityOrder(a.priority);
+        final pb = _priorityOrder(b.priority);
+        if (pa != pb) return pa.compareTo(pb);
+      }
+      // Then by created_at descending
+      return b.createdAt.compareTo(a.createdAt);
+    });
+  }
+
+  int _priorityOrder(ReminderPriority p) {
+    switch (p) {
+      case ReminderPriority.high:
+        return 0;
+      case ReminderPriority.medium:
+        return 1;
+      case ReminderPriority.low:
+        return 2;
     }
   }
 }
 
-// Bill payments for selected month
-final selectedBillMonthProvider =
-    StateProvider<DateTime>((ref) => DateTime.now());
-
-final billPaymentsProvider =
-    FutureProvider.family<List<BillPaymentStatus>, String>((ref, month) async {
-  final localPayments = await ref.read(billRepositoryProvider).getPaymentsForMonth(month);
-  final auth = ref.watch(authProvider);
-  if (auth.hasRemoteSession) {
-    try {
-      final remotePayments = await ref.read(remoteBillRepositoryProvider).getPaymentsForMonth(month);
-      return [...localPayments, ...remotePayments];
-    } catch (_) {
-      return localPayments;
-    }
-  }
-  return localPayments;
+final remindersProvider =
+    StateNotifierProvider<RemindersNotifier, RemindersState>((ref) {
+  return RemindersNotifier(ref.read(reminderRepositoryProvider));
 });
 
 // ─── Plans ───────────────────────────────────────────────────────────────────

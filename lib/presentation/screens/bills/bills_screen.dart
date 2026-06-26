@@ -4,668 +4,936 @@ import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../../core/constants/app_theme.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../data/models/bill_model.dart';
-import '../../../data/repositories/bill_repository.dart';
+import '../../../data/models/reminder_model.dart';
 
-class BillsScreen extends ConsumerStatefulWidget {
-  const BillsScreen({super.key});
+class RemindersScreen extends ConsumerWidget {
+  const RemindersScreen({super.key});
 
   @override
-  ConsumerState<BillsScreen> createState() => _BillsScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(remindersProvider);
 
-class _BillsScreenState extends ConsumerState<BillsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recurring Bills'),
-        bottom: TabBar(
-          controller: _tabCtrl,
-          indicatorColor: AppTheme.primary,
-          labelColor: AppTheme.primary,
-          unselectedLabelColor: AppTheme.textSecondary,
-          tabs: const [
-            Tab(icon: Icon(Icons.calendar_month), text: 'Monthly Tracker'),
-            Tab(icon: Icon(Icons.receipt_long), text: 'Manage Bills'),
-          ],
-        ),
+        title: const Text('Reminders'),
+        actions: [
+          if (state.reminders.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _StatsChip(reminders: state.reminders),
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showBillForm(context, ref),
+        onPressed: () => _showReminderForm(context, ref),
         icon: const Icon(Icons.add),
-        label: const Text('New Bill'),
-        backgroundColor: AppTheme.warning,
+        label: const Text('New Reminder'),
+        backgroundColor: AppTheme.primary,
       ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: const [
-          _MonthlyTrackerTab(),
-          _ManageBillsTab(),
+      body: _buildBody(context, ref, state),
+    );
+  }
+
+  Widget _buildBody(
+      BuildContext context, WidgetRef ref, RemindersState state) {
+    if (state.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (state.error != null) {
+      return Center(
+        child: Text(state.error!,
+            style: const TextStyle(color: AppTheme.error)),
+      );
+    }
+
+    if (state.reminders.isEmpty) {
+      return const EmptyState(
+        icon: Icons.notifications_none_outlined,
+        title: 'No reminders yet',
+        subtitle:
+            'Add reminders for expenses, income, tasks or anything you want to track.',
+      );
+    }
+
+    // Split into pending and completed
+    final pending =
+        state.reminders.where((r) => !r.isCompleted).toList();
+    final completed =
+        state.reminders.where((r) => r.isCompleted).toList();
+
+    return RefreshIndicator(
+      onRefresh: () => ref.read(remindersProvider.notifier).refresh(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+        children: [
+          if (pending.isNotEmpty) ...[
+            _SectionLabel(
+              label: 'Pending',
+              count: pending.length,
+              color: AppTheme.primary,
+            ),
+            const SizedBox(height: 8),
+            ...pending.map((r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ReminderCard(
+                    reminder: r,
+                    onToggle: () =>
+                        ref.read(remindersProvider.notifier).toggleCompleted(r.id),
+                    onEdit: () => _showReminderForm(context, ref, reminder: r),
+                    onDelete: () => _confirmDelete(context, ref, r),
+                  ),
+                )),
+            const SizedBox(height: 16),
+          ],
+          if (completed.isNotEmpty) ...[
+            _SectionLabel(
+              label: 'Completed',
+              count: completed.length,
+              color: AppTheme.textSecondary,
+            ),
+            const SizedBox(height: 8),
+            ...completed.map((r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ReminderCard(
+                    reminder: r,
+                    onToggle: () =>
+                        ref.read(remindersProvider.notifier).toggleCompleted(r.id),
+                    onEdit: () => _showReminderForm(context, ref, reminder: r),
+                    onDelete: () => _confirmDelete(context, ref, r),
+                  ),
+                )),
+          ],
         ],
       ),
     );
   }
 
-  void _showBillForm(BuildContext context, WidgetRef ref, {BillModel? bill}) {
-    final titleCtrl = TextEditingController(text: bill?.title ?? '');
-    final amountCtrl =
-        TextEditingController(text: bill?.amount.toString() ?? '');
-    final notesCtrl = TextEditingController(text: bill?.notes ?? '');
-    int dueDay = bill?.dueDay ?? 1;
+  Future<void> _confirmDelete(
+      BuildContext context, WidgetRef ref, ReminderModel reminder) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete Reminder',
+      message: 'Delete "${reminder.title}"? This cannot be undone.',
+    );
+    if (ok) {
+      ref.read(remindersProvider.notifier).delete(reminder.id);
+    }
+  }
 
+  void _showReminderForm(BuildContext context, WidgetRef ref,
+      {ReminderModel? reminder}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.surface,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setLocal) => Padding(
-          padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(bill != null ? 'Edit Bill' : 'New Recurring Bill',
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary)),
-            const SizedBox(height: 16),
-            AppTextField(
-                label: 'Bill Name',
-                hint: 'e.g. Netflix, Rent',
-                controller: titleCtrl),
-            const SizedBox(height: 12),
-            AppTextField(
-              label: 'Amount',
-              hint: '0.00',
-              controller: amountCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              prefixIcon: const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: Text('\$',
-                      style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16))),
-            ),
-            const SizedBox(height: 12),
-            Row(children: [
-              const Text('Due day of month:',
-                  style: TextStyle(color: AppTheme.textSecondary)),
-              const Spacer(),
-              IconButton(
-                  icon: const Icon(Icons.remove_circle_outline,
-                      color: AppTheme.textSecondary),
-                  onPressed: () =>
-                      setLocal(() => dueDay = (dueDay - 1).clamp(1, 31))),
-              Container(
-                width: 44,
-                alignment: Alignment.center,
-                child: Text('$dueDay',
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary)),
-              ),
-              IconButton(
-                  icon: const Icon(Icons.add_circle_outline,
-                      color: AppTheme.primary),
-                  onPressed: () =>
-                      setLocal(() => dueDay = (dueDay + 1).clamp(1, 31))),
-            ]),
-            const SizedBox(height: 12),
-            AppTextField(
-                label: 'Notes (optional)', controller: notesCtrl, maxLines: 2),
-            const SizedBox(height: 20),
-            AppButton(
-              label: bill != null ? 'Update Bill' : 'Create Bill',
-              color: AppTheme.warning,
-              icon: bill != null ? Icons.save : Icons.add,
-              onPressed: () async {
-                if (titleCtrl.text.trim().isEmpty ||
-                    amountCtrl.text.trim().isEmpty) {
-                  return;
-                }
-                if (bill != null) {
-                  await ref.read(billsProvider.notifier).updateBill(bill.id,
-                      title: titleCtrl.text.trim(),
-                      amount: double.parse(amountCtrl.text),
-                      dueDay: dueDay,
-                      notes: notesCtrl.text.trim().isNotEmpty
-                          ? notesCtrl.text.trim()
-                          : null,
-                      remote: bill.isRemote);
-                } else {
-                  await ref.read(billsProvider.notifier).create(
-                      title: titleCtrl.text.trim(),
-                      amount: double.parse(amountCtrl.text),
-                      dueDay: dueDay,
-                      notes: notesCtrl.text.trim().isNotEmpty
-                          ? notesCtrl.text.trim()
-                          : null);
-                }
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-            ),
-          ]),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (_) => _ReminderFormSheet(reminder: reminder, ref: ref),
     );
   }
 }
 
-// ─── Monthly Tracker Tab ─────────────────────────────────────────────────────
-class _MonthlyTrackerTab extends ConsumerStatefulWidget {
-  const _MonthlyTrackerTab();
+// ─── Reminder Form Sheet ──────────────────────────────────────────────────────
+
+class _ReminderFormSheet extends StatefulWidget {
+  final ReminderModel? reminder;
+  final WidgetRef ref;
+
+  const _ReminderFormSheet({this.reminder, required this.ref});
 
   @override
-  ConsumerState<_MonthlyTrackerTab> createState() => _MonthlyTrackerTabState();
+  State<_ReminderFormSheet> createState() => _ReminderFormSheetState();
 }
 
-class _MonthlyTrackerTabState extends ConsumerState<_MonthlyTrackerTab> {
-  DateTime _month = DateTime.now();
+class _ReminderFormSheetState extends State<_ReminderFormSheet> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _notesCtrl;
+  late ReminderType _type;
+  late ReminderPriority _priority;
+  DateTime? _dueDate;
+  bool _isSaving = false;
 
-  String get _monthKey => DateFormat('yyyy-MM').format(_month);
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.reminder;
+    _titleCtrl = TextEditingController(text: r?.title ?? '');
+    _notesCtrl = TextEditingController(text: r?.notes ?? '');
+    _type = r?.type ?? ReminderType.task;
+    _priority = r?.priority ?? ReminderPriority.medium;
+    _dueDate = r?.dueDate;
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final paymentsAsync = ref.watch(billPaymentsProvider(_monthKey));
-
-    return Column(children: [
-      // Month selector
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        color: AppTheme.background,
-        child: Row(children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left, color: AppTheme.textPrimary),
-            onPressed: () => setState(
-                () => _month = DateTime(_month.year, _month.month - 1)),
-          ),
-          Expanded(
-            child: Text(
-              DateFormat('MMMM yyyy').format(_month),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right, color: AppTheme.textPrimary),
-            onPressed: () => setState(
-                () => _month = DateTime(_month.year, _month.month + 1)),
-          ),
-        ]),
+    final isEditing = widget.reminder != null;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-
-      // Summary bar
-      paymentsAsync.when(
-        data: (payments) {
-          final paid = payments.where((p) => p.isPaid).length;
-          final total = payments.length;
-          final paidAmount = payments
-              .where((p) => p.isPaid)
-              .fold(0.0, (s, p) => s + (p.paidAmount ?? p.expectedAmount));
-          final totalAmount =
-              payments.fold(0.0, (s, p) => s + p.expectedAmount);
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            color: AppTheme.surfaceVariant,
-            child: Row(children: [
-              _SummaryPill(
-                label: '$paid/$total paid',
-                color: AppTheme.success,
-                icon: Icons.check_circle_outline,
-              ),
-              const SizedBox(width: 12),
-              _SummaryPill(
-                label: CurrencyFormatter.format(paidAmount),
-                color: AppTheme.income,
-                icon: Icons.paid_outlined,
-              ),
-              const Spacer(),
-              _SummaryPill(
-                label: CurrencyFormatter.format(totalAmount - paidAmount),
-                color: AppTheme.warning,
-                icon: Icons.pending_outlined,
-              ),
-            ]),
-          );
-        },
-        loading: () => const SizedBox(height: 48),
-        error: (_, __) => const SizedBox.shrink(),
-      ),
-
-      // Bills list
-      Expanded(
-        child: paymentsAsync.when(
-          data: (payments) {
-            if (payments.isEmpty) {
-              return const EmptyState(
-                icon: Icons.receipt_long,
-                title: 'No bills found',
-                subtitle: 'Add recurring bills to track monthly payments',
-              );
-            }
-            return RefreshIndicator(
-              onRefresh: () async =>
-                  ref.invalidate(billPaymentsProvider(_monthKey)),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: payments.length,
-                itemBuilder: (ctx, i) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _BillPaymentCard(
-                    payment: payments[i],
-                    onToggle: () => _togglePayment(ctx, payments[i]),
-                  ),
-                ),
-              ),
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(
-              child: Text(e.toString(),
-                  style: const TextStyle(color: AppTheme.error))),
-        ),
-      ),
-
-      // Reset button
-      Padding(
-        padding: const EdgeInsets.all(16),
-        child: AppButton(
-          label: 'Reset All to Pending',
-          isOutlined: true,
-          icon: Icons.refresh,
-          onPressed: () async {
-            final ok = await showConfirmDialog(context,
-                title: 'Reset Payments',
-                message: 'Mark all bills as pending for $_monthKey?',
-                confirmLabel: 'Reset',
-                confirmColor: AppTheme.warning);
-            if (ok) {
-              final repo = BillRepository();
-              await repo.resetMonthlyPayments(month: _monthKey);
-              ref.invalidate(billPaymentsProvider(_monthKey));
-            }
-          },
-        ),
-      ),
-    ]);
-  }
-
-  Future<void> _togglePayment(
-      BuildContext context, BillPaymentStatus payment) async {
-    final newStatus = payment.isPaid ? 'pending' : 'paid';
-    try {
-      if (payment.isRemote) {
-        if (newStatus == 'paid') {
-          await ref
-              .read(remoteBillRepositoryProvider)
-              .markAsPaid(payment.billId, _monthKey);
-        } else {
-          // Backend might not support unpaying via markAsPaid if it only sets status='paid'
-          // But usually we would have a way to reset it.
-          // For now, let's assume if it's remote, we can't easily 'unpay' unless there's an API.
-          // The current RemoteBillRepository only has markAsPaid.
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Cannot undo remote payment from this screen'),
-              backgroundColor: AppTheme.warning));
-          return;
-        }
-      } else {
-        final repo = ref.read(billRepositoryProvider);
-        await repo.markPayment(payment.billId,
-            month: _monthKey, status: newStatus);
-      }
-      ref.invalidate(billPaymentsProvider(_monthKey));
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString()), backgroundColor: AppTheme.error));
-      }
-    }
-  }
-}
-
-// ─── Manage Bills Tab ─────────────────────────────────────────────────────────
-class _ManageBillsTab extends ConsumerWidget {
-  const _ManageBillsTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bills = ref.watch(billsProvider);
-
-    return bills.when(
-      data: (list) {
-        if (list.isEmpty) {
-          return const EmptyState(
-            icon: Icons.receipt_long_outlined,
-            title: 'No recurring bills',
-            subtitle: 'Add bills to track your monthly obligations',
-          );
-        }
-        final totalMonthly = list.fold(0.0, (s, b) => s + b.amount);
-        return Column(children: [
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF3A2D0A), Color(0xFF2D2200)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(children: [
-              const Icon(Icons.account_balance_outlined,
-                  color: AppTheme.warning, size: 28),
-              const SizedBox(width: 12),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Total Monthly',
-                    style:
-                        TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-                Text(CurrencyFormatter.format(totalMonthly),
-                    style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.warning)),
-              ]),
-              const Spacer(),
-              Text('${list.length} bills',
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 13)),
-            ]),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => ref.read(billsProvider.notifier).refresh(),
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: list.length,
-                itemBuilder: (ctx, i) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _BillManageCard(
-                    bill: list[i],
-                    onEdit: () => _showEditForm(ctx, ref, list[i]),
-                    onDelete: () async {
-                      final ok = await showConfirmDialog(ctx,
-                          title: 'Delete Bill',
-                          message: 'Delete "${list[i].title}"?');
-                      if (ok) {
-                        ref
-                            .read(billsProvider.notifier)
-                            .delete(list[i].id, remote: list[i].isRemote);
-                      }
-                    },
-                  ),
-                ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.divider,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-        ]);
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text(e.toString())),
-    );
-  }
+          const SizedBox(height: 20),
 
-  void _showEditForm(BuildContext context, WidgetRef ref, BillModel bill) {
-    final state = context.findAncestorStateOfType<_BillsScreenState>();
-    state?._showBillForm(context, ref, bill: bill);
-  }
-}
-
-// ─── Bill Payment Card ────────────────────────────────────────────────────────
-class _BillPaymentCard extends StatelessWidget {
-  final BillPaymentStatus payment;
-  final VoidCallback onToggle;
-
-  const _BillPaymentCard({required this.payment, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    final isPaid = payment.isPaid;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isPaid
-              ? AppTheme.success.withValues(alpha: 0.4)
-              : AppTheme.warning.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(children: [
-        GestureDetector(
-          onTap: onToggle,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: isPaid
-                  ? AppTheme.success.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              border: Border.all(
-                color: isPaid ? AppTheme.success : AppTheme.textSecondary,
-                width: 2,
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: isPaid
-                ? const Icon(Icons.check, color: AppTheme.success, size: 16)
-                : null,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(payment.title,
-                style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                    color:
-                        isPaid ? AppTheme.textSecondary : AppTheme.textPrimary,
-                    decoration: isPaid ? TextDecoration.lineThrough : null)),
-            Row(children: [
-              Text('Due: ${payment.dueDay}${_ordinal(payment.dueDay)}',
-                  style: const TextStyle(
-                      color: AppTheme.textSecondary, fontSize: 11)),
-              if (payment.billNotes != null &&
-                  payment.billNotes!.isNotEmpty) ...[
-                const Text(' • ',
-                    style: TextStyle(color: AppTheme.textSecondary)),
-                Flexible(
-                    child: Text(payment.billNotes!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: AppTheme.textSecondary, fontSize: 11))),
-              ]
-            ]),
-          ]),
-        ),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          // Title
           Text(
-            CurrencyFormatter.format(
-                payment.paidAmount ?? payment.expectedAmount),
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: isPaid ? AppTheme.success : AppTheme.warning),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: isPaid
-                  ? AppTheme.success.withValues(alpha: 0.1)
-                  : AppTheme.warning.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              isPaid ? 'PAID' : 'PENDING',
-              style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  color: isPaid ? AppTheme.success : AppTheme.warning),
+            isEditing ? 'Edit Reminder' : 'New Reminder',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
             ),
           ),
-        ]),
-      ]),
+          const SizedBox(height: 20),
+
+          // Title field
+          AppTextField(
+            label: 'Title',
+            hint: 'e.g. Pay electricity bill',
+            controller: _titleCtrl,
+          ),
+          const SizedBox(height: 14),
+
+          // Type selector
+          _FormLabel('Type'),
+          const SizedBox(height: 8),
+          _TypeSelector(
+            selected: _type,
+            onChanged: (t) => setState(() => _type = t),
+          ),
+          const SizedBox(height: 14),
+
+          // Priority selector
+          _FormLabel('Priority'),
+          const SizedBox(height: 8),
+          _PrioritySelector(
+            selected: _priority,
+            onChanged: (p) => setState(() => _priority = p),
+          ),
+          const SizedBox(height: 14),
+
+          // Due date
+          _FormLabel('Due Date (optional)'),
+          const SizedBox(height: 8),
+          _DueDatePicker(
+            selected: _dueDate,
+            onChanged: (d) => setState(() => _dueDate = d),
+            onClear: () => setState(() => _dueDate = null),
+          ),
+          const SizedBox(height: 14),
+
+          // Notes
+          AppTextField(
+            label: 'Notes (optional)',
+            hint: 'Any additional details…',
+            controller: _notesCtrl,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 24),
+
+          // Save button
+          AppButton(
+            label: isEditing ? 'Save Changes' : 'Create Reminder',
+            icon: isEditing ? Icons.save_outlined : Icons.add,
+            isLoading: _isSaving,
+            onPressed: _save,
+          ),
+        ],
+      ),
     );
   }
 
-  String _ordinal(int n) {
-    if (n >= 11 && n <= 13) return 'th';
-    switch (n % 10) {
-      case 1:
-        return 'st';
-      case 2:
-        return 'nd';
-      case 3:
-        return 'rd';
-      default:
-        return 'th';
+  Future<void> _save() async {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a title'),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final notifier = widget.ref.read(remindersProvider.notifier);
+    bool ok;
+
+    if (widget.reminder != null) {
+      ok = await notifier.update(
+        widget.reminder!.id,
+        title: title,
+        notes: _notesCtrl.text.trim().isNotEmpty
+            ? _notesCtrl.text.trim()
+            : null,
+        type: _type,
+        priority: _priority,
+        isCompleted: widget.reminder!.isCompleted,
+        dueDate: _dueDate,
+        clearDueDate: _dueDate == null,
+      );
+    } else {
+      ok = await notifier.create(
+        title: title,
+        notes: _notesCtrl.text.trim().isNotEmpty
+            ? _notesCtrl.text.trim()
+            : null,
+        type: _type,
+        priority: _priority,
+        dueDate: _dueDate,
+      );
+    }
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (ok) {
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+          backgroundColor: AppTheme.error,
+        ),
+      );
     }
   }
 }
 
-// ─── Bill Manage Card ─────────────────────────────────────────────────────────
-class _BillManageCard extends StatelessWidget {
-  final BillModel bill;
+// ─── Reminder Card ────────────────────────────────────────────────────────────
+
+class _ReminderCard extends StatelessWidget {
+  final ReminderModel reminder;
+  final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const _BillManageCard(
-      {required this.bill, required this.onEdit, required this.onDelete});
+  const _ReminderCard({
+    required this.reminder,
+    required this.onToggle,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
+    final completed = reminder.isCompleted;
+    final typeInfo = _typeInfo(reminder.type);
+    final priorityColor = _priorityColor(reminder.priority);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-          color: AppTheme.surface, borderRadius: BorderRadius.circular(12)),
-      child: Row(children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-              color: AppTheme.warning.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.receipt_outlined,
-              color: AppTheme.warning, size: 20),
+        color: completed
+            ? AppTheme.surface.withValues(alpha: 0.6)
+            : AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: completed
+              ? AppTheme.divider
+              : priorityColor.withValues(alpha: 0.35),
+          width: completed ? 1 : 1.5,
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(bill.title,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                    fontSize: 14)),
-            Text('Due: ${bill.dueDay}${_ordinal(bill.dueDay)} of each month',
-                style: const TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 12)),
-          ]),
-        ),
-        Text(CurrencyFormatter.format(bill.amount),
-            style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppTheme.warning,
-                fontSize: 14)),
-        const SizedBox(width: 4),
-        PopupMenuButton(
-          color: AppTheme.surfaceVariant,
-          icon: const Icon(Icons.more_vert,
-              color: AppTheme.textSecondary, size: 20),
-          itemBuilder: (_) => [
-            const PopupMenuItem(
-                value: 'edit',
-                child: Row(children: [
-                  Icon(Icons.edit, size: 16, color: AppTheme.primary),
-                  SizedBox(width: 8),
-                  Text('Edit', style: TextStyle(color: AppTheme.textPrimary)),
-                ])),
-            const PopupMenuItem(
-                value: 'delete',
-                child: Row(children: [
-                  Icon(Icons.delete, size: 16, color: AppTheme.error),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: AppTheme.error)),
-                ])),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Checkbox
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: GestureDetector(
+                onTap: onToggle,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: completed
+                        ? AppTheme.success.withValues(alpha: 0.15)
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: completed
+                          ? AppTheme.success
+                          : AppTheme.textSecondary,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: completed
+                      ? const Icon(Icons.check,
+                          color: AppTheme.success, size: 14)
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          reminder.title,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: completed
+                                ? AppTheme.textSecondary
+                                : AppTheme.textPrimary,
+                            decoration: completed
+                                ? TextDecoration.lineThrough
+                                : null,
+                            decorationColor: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Type badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: typeInfo.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(typeInfo.icon,
+                                size: 11, color: typeInfo.color),
+                            const SizedBox(width: 3),
+                            Text(
+                              typeInfo.label,
+                              style: TextStyle(
+                                color: typeInfo.color,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (reminder.notes != null &&
+                      reminder.notes!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      reminder.notes!,
+                      style: const TextStyle(
+                          color: AppTheme.textSecondary, fontSize: 12),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      // Priority indicator
+                      if (!completed) ...[
+                        _PriorityDot(priority: reminder.priority),
+                        const SizedBox(width: 6),
+                        Text(
+                          _priorityLabel(reminder.priority),
+                          style: TextStyle(
+                              color: priorityColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                      if (!completed && reminder.dueDate != null)
+                        const Text(' · ',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11)),
+                      if (reminder.dueDate != null)
+                        Row(children: [
+                          Icon(
+                            Icons.event_outlined,
+                            size: 11,
+                            color: _dueDateColor(
+                                reminder.dueDate!, reminder.isCompleted),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            DateFormat('MMM d').format(reminder.dueDate!),
+                            style: TextStyle(
+                              color: _dueDateColor(
+                                  reminder.dueDate!, reminder.isCompleted),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ]),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Actions menu
+            SizedBox(
+              width: 32,
+              child: PopupMenuButton<String>(
+                color: AppTheme.surfaceVariant,
+                icon: const Icon(Icons.more_vert,
+                    color: AppTheme.textSecondary, size: 18),
+                padding: EdgeInsets.zero,
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      Icon(Icons.edit_outlined,
+                          size: 16, color: AppTheme.primary),
+                      SizedBox(width: 8),
+                      Text('Edit',
+                          style: TextStyle(color: AppTheme.textPrimary)),
+                    ]),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline,
+                          size: 16, color: AppTheme.error),
+                      SizedBox(width: 8),
+                      Text('Delete',
+                          style: TextStyle(color: AppTheme.error)),
+                    ]),
+                  ),
+                ],
+                onSelected: (v) {
+                  if (v == 'edit') onEdit();
+                  if (v == 'delete') onDelete();
+                },
+              ),
+            ),
           ],
-          onSelected: (v) {
-            if (v == 'edit') {
-              onEdit();
-            }
-            if (v == 'delete') {
-              onDelete();
-            }
-          },
         ),
-      ]),
+      ),
     );
   }
 
-  String _ordinal(int n) {
-    if (n >= 11 && n <= 13) return 'th';
-    switch (n % 10) {
-      case 1:
-        return 'st';
-      case 2:
-        return 'nd';
-      case 3:
-        return 'rd';
-      default:
-        return 'th';
+  _TypeInfo _typeInfo(ReminderType type) {
+    switch (type) {
+      case ReminderType.expense:
+        return _TypeInfo(
+            icon: Icons.arrow_upward, color: AppTheme.expense, label: 'Expense');
+      case ReminderType.income:
+        return _TypeInfo(
+            icon: Icons.arrow_downward, color: AppTheme.income, label: 'Income');
+      case ReminderType.task:
+        return _TypeInfo(
+            icon: Icons.task_alt_outlined,
+            color: AppTheme.primary,
+            label: 'Task');
+      case ReminderType.custom:
+        return _TypeInfo(
+            icon: Icons.label_outline,
+            color: AppTheme.secondary,
+            label: 'Custom');
+    }
+  }
+
+  Color _priorityColor(ReminderPriority p) {
+    switch (p) {
+      case ReminderPriority.high:
+        return AppTheme.error;
+      case ReminderPriority.medium:
+        return AppTheme.warning;
+      case ReminderPriority.low:
+        return AppTheme.textSecondary;
+    }
+  }
+
+  String _priorityLabel(ReminderPriority p) {
+    switch (p) {
+      case ReminderPriority.high:
+        return 'High';
+      case ReminderPriority.medium:
+        return 'Medium';
+      case ReminderPriority.low:
+        return 'Low';
+    }
+  }
+
+  Color _dueDateColor(DateTime dueDate, bool isCompleted) {
+    if (isCompleted) return AppTheme.textSecondary;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    if (due.isBefore(today)) return AppTheme.error;
+    if (due.isAtSameMomentAs(today)) return AppTheme.warning;
+    return AppTheme.textSecondary;
+  }
+}
+
+// ─── Type Selector ────────────────────────────────────────────────────────────
+
+class _TypeSelector extends StatelessWidget {
+  final ReminderType selected;
+  final ValueChanged<ReminderType> onChanged;
+
+  const _TypeSelector({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: ReminderType.values.map((type) {
+        final info = _info(type);
+        final isSelected = selected == type;
+        return GestureDetector(
+          onTap: () => onChanged(type),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? info.color.withValues(alpha: 0.18)
+                  : AppTheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color:
+                    isSelected ? info.color : Colors.transparent,
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(info.icon,
+                    size: 14,
+                    color: isSelected
+                        ? info.color
+                        : AppTheme.textSecondary),
+                const SizedBox(width: 6),
+                Text(
+                  info.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isSelected
+                        ? info.color
+                        : AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  _TypeInfo _info(ReminderType type) {
+    switch (type) {
+      case ReminderType.expense:
+        return _TypeInfo(
+            icon: Icons.arrow_upward, color: AppTheme.expense, label: 'Expense');
+      case ReminderType.income:
+        return _TypeInfo(
+            icon: Icons.arrow_downward, color: AppTheme.income, label: 'Income');
+      case ReminderType.task:
+        return _TypeInfo(
+            icon: Icons.task_alt_outlined,
+            color: AppTheme.primary,
+            label: 'Task');
+      case ReminderType.custom:
+        return _TypeInfo(
+            icon: Icons.label_outline,
+            color: AppTheme.secondary,
+            label: 'Custom');
     }
   }
 }
 
-class _SummaryPill extends StatelessWidget {
-  final String label;
-  final Color color;
-  final IconData icon;
+// ─── Priority Selector ────────────────────────────────────────────────────────
 
-  const _SummaryPill(
-      {required this.label, required this.color, required this.icon});
+class _PrioritySelector extends StatelessWidget {
+  final ReminderPriority selected;
+  final ValueChanged<ReminderPriority> onChanged;
+
+  const _PrioritySelector({required this.selected, required this.onChanged});
+
+  static const _items = [
+    (priority: ReminderPriority.high, label: 'High', color: AppTheme.error),
+    (priority: ReminderPriority.medium, label: 'Medium', color: AppTheme.warning),
+    (priority: ReminderPriority.low, label: 'Low', color: AppTheme.textSecondary),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Icon(icon, color: color, size: 14),
-      const SizedBox(width: 4),
-      Text(label,
-          style: TextStyle(
-              color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-    ]);
+    return Row(
+      children: _items.map((item) {
+        final isSelected = selected == item.priority;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => onChanged(item.priority),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? item.color.withValues(alpha: 0.15)
+                      : AppTheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected ? item.color : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? item.color : AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
+}
+
+// ─── Due Date Picker ──────────────────────────────────────────────────────────
+
+class _DueDatePicker extends StatelessWidget {
+  final DateTime? selected;
+  final ValueChanged<DateTime?> onChanged;
+  final VoidCallback onClear;
+
+  const _DueDatePicker({
+    required this.selected,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: selected ?? DateTime.now(),
+          firstDate: DateTime.now().subtract(const Duration(days: 365)),
+          lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+          builder: (ctx, child) => Theme(
+            data: Theme.of(ctx).copyWith(
+              colorScheme: const ColorScheme.dark(
+                primary: AppTheme.primary,
+                surface: AppTheme.surfaceVariant,
+                onSurface: AppTheme.textPrimary,
+              ),
+            ),
+            child: child!,
+          ),
+        );
+        if (picked != null) onChanged(picked);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_outlined,
+                size: 18, color: AppTheme.textSecondary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                selected != null
+                    ? DateFormat('MMMM d, yyyy').format(selected!)
+                    : 'Select a due date',
+                style: TextStyle(
+                  color: selected != null
+                      ? AppTheme.textPrimary
+                      : AppTheme.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            if (selected != null)
+              GestureDetector(
+                onTap: onClear,
+                child: const Icon(Icons.close,
+                    size: 16, color: AppTheme.textSecondary),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Stats Chip (AppBar) ──────────────────────────────────────────────────────
+
+class _StatsChip extends StatelessWidget {
+  final List<ReminderModel> reminders;
+
+  const _StatsChip({required this.reminders});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = reminders.length;
+    final done = reminders.where((r) => r.isCompleted).length;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        '$done/$total done',
+        style: const TextStyle(
+          color: AppTheme.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Section Label ────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _SectionLabel(
+      {required this.label, required this.count, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.8),
+        ),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$count',
+            style: TextStyle(
+                color: color, fontSize: 11, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Priority Dot ─────────────────────────────────────────────────────────────
+
+class _PriorityDot extends StatelessWidget {
+  final ReminderPriority priority;
+
+  const _PriorityDot({required this.priority});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 7,
+      height: 7,
+      decoration: BoxDecoration(
+        color: _color(),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  Color _color() {
+    switch (priority) {
+      case ReminderPriority.high:
+        return AppTheme.error;
+      case ReminderPriority.medium:
+        return AppTheme.warning;
+      case ReminderPriority.low:
+        return AppTheme.textSecondary;
+    }
+  }
+}
+
+// ─── Form Label ───────────────────────────────────────────────────────────────
+
+class _FormLabel extends StatelessWidget {
+  final String text;
+
+  const _FormLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+          color: AppTheme.textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600),
+    );
+  }
+}
+
+// ─── Internal helpers ─────────────────────────────────────────────────────────
+
+class _TypeInfo {
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  const _TypeInfo({required this.icon, required this.color, required this.label});
 }

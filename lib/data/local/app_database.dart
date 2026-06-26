@@ -11,7 +11,7 @@ class AppDatabase extends GeneratedDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
@@ -24,6 +24,11 @@ class AppDatabase extends GeneratedDatabase {
         beforeOpen: (_) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await _createSchema();
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await _migrateV1toV2();
+          }
         },
       );
 
@@ -135,6 +140,37 @@ class AppDatabase extends GeneratedDatabase {
         expected_amount REAL NOT NULL,
         spent_amount REAL NOT NULL DEFAULT 0,
         notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+
+    // Reminders table (added in schema v2)
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        notes TEXT,
+        type TEXT NOT NULL DEFAULT 'custom',
+        priority TEXT NOT NULL DEFAULT 'medium',
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        due_date TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _migrateV1toV2() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        notes TEXT,
+        type TEXT NOT NULL DEFAULT 'custom',
+        priority TEXT NOT NULL DEFAULT 'medium',
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        due_date TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )

@@ -187,10 +187,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
 
-          // ── Bills ──────────────────────────────────────────────────────────
+          // ── Reminders ──────────────────────────────────────────────────────
           GoRoute(
             path: '/bills',
-            builder: (_, __) => const BillsScreen(),
+            builder: (_, __) => const RemindersScreen(),
           ),
 
           // ── Plans ──────────────────────────────────────────────────────────
@@ -291,9 +291,9 @@ class MainShell extends StatelessWidget {
                   label: 'Income',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  selectedIcon: Icon(Icons.receipt_long),
-                  label: 'Bills',
+                  icon: Icon(Icons.notifications_none_outlined),
+                  selectedIcon: Icon(Icons.notifications),
+                  label: 'Reminders',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.flag_outlined),
