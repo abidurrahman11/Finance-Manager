@@ -52,7 +52,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const VerifyEmailScreen(),
       ),
 
-      // ── Main shell with bottom nav ─────────────────────────────────────────
+      // ── Analytics — pushed route (not a nav-bar tab) ──────────────────────
+      GoRoute(
+        path: '/analytics',
+        builder: (_, __) => const AnalyticsScreen(),
+      ),
+
+      // ── Profile — pushed route (not a nav-bar tab) ────────────────────────
+      GoRoute(
+        path: '/profile',
+        builder: (_, __) => const ProfileScreen(),
+      ),
+
+      // ── Main shell with bottom nav (5 tabs) ───────────────────────────────
       ShellRoute(
         builder: (context, state, child) =>
             MainShell(location: state.matchedLocation, child: child),
@@ -68,7 +80,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/expenses',
             builder: (_, __) => const ExpensesHubScreen(),
             routes: [
-              // Add new expense — extra is ExpenseGroupModel? or absent
               GoRoute(
                 path: 'new',
                 builder: (_, state) {
@@ -78,8 +89,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return ExpenseFormScreen(group: group);
                 },
               ),
-
-              // Edit existing expense
               GoRoute(
                 path: 'edit',
                 builder: (_, state) {
@@ -87,35 +96,20 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return ExpenseFormScreen(expense: expense);
                 },
               ),
-
-              // ── Group list screens ────────────────────────────────────────
-              // These are flat siblings — no parent wrapper — so there is no
-              // parent-level redirect that can intercept child navigation.
-
-              // Offline groups list
               GoRoute(
                 path: 'groups/offline',
                 builder: (_, __) =>
                     const ExpenseGroupsScreen(isRemote: false),
               ),
-
-              // Online (collaborative) groups list
               GoRoute(
                 path: 'groups/online',
                 builder: (_, __) =>
                     const ExpenseGroupsScreen(isRemote: true),
               ),
-
-              // Create group — shared entry point for both types
               GoRoute(
                 path: 'groups/new',
                 builder: (_, __) => const CreateGroupScreen(),
               ),
-
-              // ── Group detail ──────────────────────────────────────────────
-              // Uses a distinct prefix 'groups/detail' so the path never
-              // collides with the list routes above.
-              // extra MUST be the full ExpenseGroupModel (passed by GroupCard).
               GoRoute(
                 path: 'groups/detail/:id',
                 builder: (_, state) {
@@ -131,7 +125,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/incomes',
             builder: (_, __) => const IncomesHubScreen(),
             routes: [
-              // Add new income — extra is IncomeGroupModel? or absent
               GoRoute(
                 path: 'new',
                 builder: (_, state) {
@@ -141,8 +134,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return IncomeFormScreen(group: group);
                 },
               ),
-
-              // Edit existing income
               GoRoute(
                 path: 'edit',
                 builder: (_, state) {
@@ -150,33 +141,20 @@ final routerProvider = Provider<GoRouter>((ref) {
                   return IncomeFormScreen(income: income);
                 },
               ),
-
-              // ── Group list screens ────────────────────────────────────────
-
-              // Offline groups list
               GoRoute(
                 path: 'groups/offline',
                 builder: (_, __) =>
                     const IncomeGroupsScreen(isRemote: false),
               ),
-
-              // Online (collaborative) groups list
               GoRoute(
                 path: 'groups/online',
                 builder: (_, __) =>
                     const IncomeGroupsScreen(isRemote: true),
               ),
-
-              // Create income group — shared entry point for both types
               GoRoute(
                 path: 'groups/new',
                 builder: (_, __) => const CreateIncomeGroupScreen(),
               ),
-
-              // ── Group detail ──────────────────────────────────────────────
-              // Uses a distinct prefix 'groups/detail' so the path never
-              // collides with the list routes above.
-              // extra MUST be the full IncomeGroupModel (passed by IncomeGroupCard).
               GoRoute(
                 path: 'groups/detail/:id',
                 builder: (_, state) {
@@ -207,18 +185,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-
-          // ── Analytics ──────────────────────────────────────────────────────
-          GoRoute(
-            path: '/analytics',
-            builder: (_, __) => const AnalyticsScreen(),
-          ),
-
-          // ── Profile ────────────────────────────────────────────────────────
-          GoRoute(
-            path: '/profile',
-            builder: (_, __) => const ProfileScreen(),
-          ),
         ],
       ),
     ],
@@ -239,75 +205,64 @@ class MainShell extends StatelessWidget {
     if (location.startsWith('/incomes')) return 2;
     if (location.startsWith('/bills')) return 3;
     if (location.startsWith('/plans')) return 4;
-    if (location.startsWith('/analytics')) return 5;
     return 0;
   }
 
   @override
   Widget build(BuildContext context) {
     final idx = _getIndex();
-    final showNav = !location.startsWith('/profile');
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: showNav
-          ? NavigationBar(
-              selectedIndex: idx,
-              onDestinationSelected: (i) {
-                switch (i) {
-                  case 0:
-                    context.go('/dashboard');
-                  case 1:
-                    context.go('/expenses');
-                  case 2:
-                    context.go('/incomes');
-                  case 3:
-                    context.go('/bills');
-                  case 4:
-                    context.go('/plans');
-                  case 5:
-                    context.go('/analytics');
-                }
-              },
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              indicatorColor: Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withValues(alpha: 0.2),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
-                  label: 'Home',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.arrow_upward_outlined),
-                  selectedIcon: Icon(Icons.arrow_upward),
-                  label: 'Expenses',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.arrow_downward_outlined),
-                  selectedIcon: Icon(Icons.arrow_downward),
-                  label: 'Income',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.notifications_none_outlined),
-                  selectedIcon: Icon(Icons.notifications),
-                  label: 'Reminders',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.flag_outlined),
-                  selectedIcon: Icon(Icons.flag),
-                  label: 'Plans',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bar_chart_outlined),
-                  selectedIcon: Icon(Icons.bar_chart),
-                  label: 'Analytics',
-                ),
-              ],
-            )
-          : null,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: idx,
+        onDestinationSelected: (i) {
+          switch (i) {
+            case 0:
+              context.go('/dashboard');
+            case 1:
+              context.go('/expenses');
+            case 2:
+              context.go('/incomes');
+            case 3:
+              context.go('/bills');
+            case 4:
+              context.go('/plans');
+          }
+        },
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        indicatorColor: Theme.of(context)
+            .colorScheme
+            .primary
+            .withValues(alpha: 0.2),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.arrow_upward_outlined),
+            selectedIcon: Icon(Icons.arrow_upward),
+            label: 'Expenses',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.arrow_downward_outlined),
+            selectedIcon: Icon(Icons.arrow_downward),
+            label: 'Income',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_none_outlined),
+            selectedIcon: Icon(Icons.notifications),
+            label: 'Reminders',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.flag_outlined),
+            selectedIcon: Icon(Icons.flag),
+            label: 'Plans',
+          ),
+        ],
+      ),
     );
   }
 }

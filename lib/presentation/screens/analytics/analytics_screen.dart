@@ -35,6 +35,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analytics'),
+        // Back button is shown automatically when this screen is pushed
         bottom: TabBar(
           controller: _tabCtrl,
           indicatorColor: AppTheme.primary,
@@ -438,7 +439,7 @@ class _CategoryTab extends ConsumerWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '${cat.expenseCount} transactions • ${(pct * 100).toStringAsFixed(1)}% of total',
+                                '${cat.expenseCount} transactions · ${(pct * 100).toStringAsFixed(1)}% of total',
                                 style: const TextStyle(
                                     color: AppTheme.textSecondary,
                                     fontSize: 11),
@@ -479,7 +480,6 @@ class _TrendsTab extends ConsumerWidget {
             );
           }
 
-          // Sort ascending for chart
           final sorted = [...trends]
             ..sort((a, b) => a.month.compareTo(b.month));
           final maxY = sorted.isEmpty
@@ -615,7 +615,6 @@ class _TrendsTab extends ConsumerWidget {
 
               const SizedBox(height: 16),
 
-              // Month-by-month list (descending)
               ...trends.map((t) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Container(
