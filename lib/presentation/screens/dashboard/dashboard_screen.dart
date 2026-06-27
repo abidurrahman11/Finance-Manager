@@ -190,8 +190,8 @@ class DashboardScreen extends ConsumerWidget {
                           ),
                           const SizedBox(width: 12),
                           _QuickAction(
-                            icon: Icons.receipt_long_outlined,
-                            label: 'View\nBills',
+                            icon: Icons.notifications_none_outlined,
+                            label: 'Reminders',
                             color: AppTheme.warning,
                             onTap: () => context.go('/bills'),
                           ),

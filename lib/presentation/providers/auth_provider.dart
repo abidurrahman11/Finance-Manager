@@ -127,6 +127,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Updates the user's display name and refreshes auth state.
+  Future<bool> updateProfile({required String name}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final updated = await _repo.updateProfile(name: name);
+      state = state.copyWith(isLoading: false, user: updated);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
   Future<bool> changePassword(String oldPass, String newPass) async {
     state = state.copyWith(isLoading: true, error: null);
     try {

@@ -76,6 +76,16 @@ class AuthRepository {
     }
   }
 
+  /// Updates the current user's display name. Returns the updated [UserModel].
+  Future<UserModel> updateProfile({required String name}) async {
+    try {
+      final response = await _dio.put('/auth/me', data: {'name': name});
+      return UserModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _apiException(e, 'Failed to update profile');
+    }
+  }
+
   Future<void> changePassword({
     required String oldPassword,
     required String newPassword,
@@ -115,15 +125,14 @@ class AuthRepository {
   ApiException _apiException(DioException e, String fallback) {
     final response = e.response;
     final data = response?.data;
-    
-    // Check if the server returned a specific error message
+
     if (data is Map && data['message'] != null) {
-      return ApiException(data['message'].toString(), statusCode: response?.statusCode);
+      return ApiException(data['message'].toString(),
+          statusCode: response?.statusCode);
     } else if (data is String && data.isNotEmpty) {
       return ApiException(data, statusCode: response?.statusCode);
     }
 
-    // Handle specific status codes
     if (response?.statusCode == 401) {
       return ApiException('Invalid email or password.', statusCode: 401);
     }
@@ -131,7 +140,6 @@ class AuthRepository {
       return ApiException('Account access forbidden.', statusCode: 403);
     }
 
-    // Handle connection issues
     if (e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
