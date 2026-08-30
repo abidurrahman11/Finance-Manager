@@ -29,7 +29,8 @@ class ApiClient {
           handler.next(options);
         },
         onError: (error, handler) async {
-          if (error.response?.statusCode == 401) {
+          if (error.response?.statusCode == 401 &&
+              !error.requestOptions.path.contains('/auth/refresh')) {
             // Try to refresh token
             final refreshed = await _refreshToken();
             if (refreshed) {
@@ -44,6 +45,8 @@ class ApiClient {
                 return;
               } catch (_) {}
             }
+            await _storage.delete(key: AppConstants.accessTokenKey);
+            await _storage.delete(key: AppConstants.refreshTokenKey);
           }
           handler.next(error);
         },
@@ -69,6 +72,8 @@ class ApiClient {
           key: AppConstants.accessTokenKey, value: newAccessToken);
       return true;
     } catch (_) {
+      await _storage.delete(key: AppConstants.accessTokenKey);
+      await _storage.delete(key: AppConstants.refreshTokenKey);
       return false;
     }
   }

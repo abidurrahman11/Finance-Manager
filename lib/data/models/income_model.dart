@@ -9,6 +9,7 @@ class IncomeModel {
   final String? imageUrl;
   final int? incomeGroupId;
   final DateTime createdAt;
+  final bool isRemote;
 
   IncomeModel({
     required this.id,
@@ -21,6 +22,7 @@ class IncomeModel {
     this.imageUrl,
     this.incomeGroupId,
     required this.createdAt,
+    this.isRemote = false,
   });
 
   factory IncomeModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +37,7 @@ class IncomeModel {
       imageUrl: json['image_url'],
       incomeGroupId: json['income_group_id'],
       createdAt: DateTime.parse(json['created_at']),
+      isRemote: json['is_remote'] ?? false,
     );
   }
 }
@@ -48,6 +51,7 @@ class IncomeGroupModel {
   final DateTime? endDate;
   final String role;
   final DateTime createdAt;
+  final bool isRemote;
 
   IncomeGroupModel({
     required this.id,
@@ -58,6 +62,7 @@ class IncomeGroupModel {
     this.endDate,
     required this.role,
     required this.createdAt,
+    this.isRemote = false,
   });
 
   factory IncomeGroupModel.fromJson(Map<String, dynamic> json) {
@@ -72,6 +77,7 @@ class IncomeGroupModel {
           json['end_date'] != null ? DateTime.parse(json['end_date']) : null,
       role: json['role'] ?? 'owner',
       createdAt: DateTime.parse(json['created_at']),
+      isRemote: json['is_remote'] ?? true,
     );
   }
 
@@ -95,12 +101,18 @@ class PaginatedIncomes {
   });
 
   factory PaginatedIncomes.fromJson(Map<String, dynamic> json) {
+    final bool isRemote = json['is_remote'] ?? false;
     return PaginatedIncomes(
       page: json['page'],
       limit: json['limit'],
       total: json['total'],
       totalPages: json['totalPages'],
-      data: (json['data'] as List).map((e) => IncomeModel.fromJson(e)).toList(),
+      data: (json['data'] as List)
+          .map((e) => IncomeModel.fromJson({
+                ...Map<String, dynamic>.from(e as Map),
+                'is_remote': isRemote,
+              }))
+          .toList(),
     );
   }
 }

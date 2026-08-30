@@ -6,7 +6,9 @@ import '../../widgets/common/app_widgets.dart';
 import '../../../core/constants/app_theme.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+  final String? returnTo;
+
+  const RegisterScreen({super.key, this.returnTo});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
@@ -85,7 +87,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 const SizedBox(height: 32),
                 AppButton(
                   label: 'Go to Sign In',
-                  onPressed: () => context.go('/login'),
+                  onPressed: () => context.go(
+                    widget.returnTo == null
+                        ? '/login'
+                        : '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}',
+                  ),
                   icon: Icons.login,
                 ),
               ],
@@ -97,7 +103,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: BackButton(onPressed: () => context.go('/login')),
+        leading: BackButton(
+          onPressed: () => context.go(
+            widget.returnTo == null
+                ? '/login'
+                : '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}',
+          ),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -177,7 +189,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     const Text('Already have an account?',
                         style: TextStyle(color: AppTheme.textSecondary)),
                     TextButton(
-                      onPressed: () => context.go('/login'),
+                      onPressed: () => context.go(
+                        widget.returnTo == null
+                            ? '/login'
+                            : '/login?returnTo=${Uri.encodeComponent(widget.returnTo!)}',
+                      ),
                       child: const Text('Sign In'),
                     ),
                   ],

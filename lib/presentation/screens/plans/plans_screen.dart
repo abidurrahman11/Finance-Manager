@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -14,6 +15,8 @@ class PlansScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final plans = ref.watch(plansProvider);
+    final sharedPlans = ref.watch(sharedPlansProvider);
+    final auth = ref.watch(authProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Budget Plans')),
@@ -24,48 +27,112 @@ class PlansScreen extends ConsumerWidget {
         backgroundColor: AppTheme.primary,
       ),
       body: plans.when(
-        data: (list) => list.isEmpty
-            ? EmptyState(
-                icon: Icons.flag_outlined,
-                title: 'No budget plans',
-                subtitle:
-                    'Create a plan to set spending targets and track progress',
-                actionLabel: 'Create Plan',
-                onAction: () => _showCreatePlan(context, ref),
-              )
-            : RefreshIndicator(
-                onRefresh: () => ref.read(plansProvider.notifier).refresh(),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: list.length,
-                  itemBuilder: (ctx, i) {
-                    final plan = list[i];
-                    final color = AppTheme
-                        .categoryColors[i % AppTheme.categoryColors.length];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _PlanCard(
-                        plan: plan,
-                        color: color,
-                        onTap: () =>
-                            context.push('/plans/${plan.id}', extra: plan),
-                        onDelete: plan.isOwner
-                            ? () async {
-                                final ok = await showConfirmDialog(ctx,
-                                    title: 'Delete Plan',
-                                    message: 'Delete "${plan.title}"?');
-                                if (ok) {
-                                  ref
-                                      .read(plansProvider.notifier)
-                                      .delete(plan.id);
-                                }
-                              }
-                            : null,
-                      ),
-                    );
-                  },
-                ),
+        data: (list) => RefreshIndicator(
+          onRefresh: () async {
+            await ref.read(plansProvider.notifier).refresh();
+            await ref.read(sharedPlansProvider.notifier).refresh();
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const _SectionHeader(
+                title: 'Local Plans',
+                subtitle: 'Stored on this device and available offline',
               ),
+              if (list.isEmpty)
+                EmptyState(
+                  icon: Icons.flag_outlined,
+                  title: 'No local plans',
+                  subtitle:
+                      'Create a plan to set spending targets and track progress offline',
+                  actionLabel: 'Create Plan',
+                  onAction: () => _showCreatePlan(context, ref),
+                )
+              else
+                for (var i = 0; i < list.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _PlanCard(
+                      plan: list[i],
+                      color: AppTheme
+                          .categoryColors[i % AppTheme.categoryColors.length],
+                      onTap: () =>
+                          context.push('/plans/${list[i].id}', extra: list[i]),
+                      onDelete: list[i].isOwner
+                          ? () async {
+                              final ok = await showConfirmDialog(context,
+                                  title: 'Delete Plan',
+                                  message: 'Delete "${list[i].title}"?');
+                              if (ok) {
+                                ref
+                                    .read(plansProvider.notifier)
+                                    .delete(list[i].id);
+                              }
+                            }
+                          : null,
+                    ),
+                  ),
+              const SizedBox(height: 12),
+              if (auth.hasRemoteSession) ...[
+                _SectionHeader(
+                  title: 'Shared Plans',
+                  subtitle: 'Synced through your online account',
+                  actionLabel: 'New Shared',
+                  onAction: () => _showCreatePlan(context, ref, remote: true),
+                ),
+                sharedPlans.when(
+                  data: (shared) => shared.isEmpty
+                      ? const _InlineMessage('No shared plans yet.')
+                      : Column(
+                          children: [
+                            for (var i = 0; i < shared.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _PlanCard(
+                                  plan: shared[i],
+                                  color: AppTheme.categoryColors[(i + 3) %
+                                      AppTheme.categoryColors.length],
+                                  onTap: () => context.push(
+                                      '/plans/${shared[i].id}',
+                                      extra: shared[i]),
+                                  onDelete: shared[i].isOwner
+                                      ? () async {
+                                          final ok = await showConfirmDialog(
+                                            context,
+                                            title: 'Delete Shared Plan',
+                                            message:
+                                                'Delete "${shared[i].title}"?',
+                                          );
+                                          if (ok) {
+                                            ref
+                                                .read(sharedPlansProvider
+                                                    .notifier)
+                                                .delete(shared[i].id);
+                                          }
+                                        }
+                                      : null,
+                                ),
+                              ),
+                          ],
+                        ),
+                  loading: () => const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (e, _) => _InlineMessage(e.toString()),
+                ),
+              ] else
+                _OnlineFeaturePrompt(
+                  title: 'Shared Plans',
+                  message:
+                      'Sign in to create shared plans, invite collaborators, and use online permissions.',
+                  onSignIn: () => context.go(
+                    '/login?returnTo=${Uri.encodeComponent('/plans')}',
+                  ),
+                ),
+            ],
+          ),
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
             child: Text(e.toString(),
@@ -74,7 +141,8 @@ class PlansScreen extends ConsumerWidget {
     );
   }
 
-  void _showCreatePlan(BuildContext context, WidgetRef ref) {
+  void _showCreatePlan(BuildContext context, WidgetRef ref,
+      {bool remote = false}) {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final targetCtrl = TextEditingController();
@@ -96,8 +164,8 @@ class PlansScreen extends ConsumerWidget {
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('New Budget Plan',
-                  style: TextStyle(
+              Text(remote ? 'New Shared Budget Plan' : 'New Budget Plan',
+                  style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary)),
@@ -150,17 +218,29 @@ class PlansScreen extends ConsumerWidget {
                 icon: Icons.flag,
                 onPressed: () async {
                   if (titleCtrl.text.trim().isEmpty) return;
-                  final ok = await ref.read(plansProvider.notifier).create(
-                        title: titleCtrl.text.trim(),
-                        description: descCtrl.text.trim().isNotEmpty
-                            ? descCtrl.text.trim()
-                            : null,
-                        targetAmount: targetCtrl.text.trim().isNotEmpty
-                            ? double.tryParse(targetCtrl.text)
-                            : null,
-                        startDate: startDate,
-                        endDate: endDate,
-                      );
+                  final ok = remote
+                      ? await ref.read(sharedPlansProvider.notifier).create(
+                            title: titleCtrl.text.trim(),
+                            description: descCtrl.text.trim().isNotEmpty
+                                ? descCtrl.text.trim()
+                                : null,
+                            targetAmount: targetCtrl.text.trim().isNotEmpty
+                                ? double.tryParse(targetCtrl.text)
+                                : null,
+                            startDate: startDate,
+                            endDate: endDate,
+                          )
+                      : await ref.read(plansProvider.notifier).create(
+                            title: titleCtrl.text.trim(),
+                            description: descCtrl.text.trim().isNotEmpty
+                                ? descCtrl.text.trim()
+                                : null,
+                            targetAmount: targetCtrl.text.trim().isNotEmpty
+                                ? double.tryParse(targetCtrl.text)
+                                : null,
+                            startDate: startDate,
+                            endDate: endDate,
+                          );
                   if (ok && ctx.mounted) Navigator.pop(ctx);
                 },
               ),
@@ -168,6 +248,122 @@ class PlansScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _OnlineFeaturePrompt extends StatelessWidget {
+  final String title;
+  final String message;
+  final VoidCallback onSignIn;
+
+  const _OnlineFeaturePrompt({
+    required this.title,
+    required this.message,
+    required this.onSignIn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.group_outlined,
+              color: AppTheme.primary, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(message,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13)),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton.icon(
+                onPressed: onSignIn,
+                icon: const Icon(Icons.login, size: 16),
+                label: const Text('Sign In'),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _SectionHeader({
+    required this.title,
+    required this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 4),
+      child: Row(children: [
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 11)),
+          ]),
+        ),
+        if (actionLabel != null && onAction != null)
+          TextButton.icon(
+            onPressed: onAction,
+            icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+            label: Text(actionLabel!),
+          ),
+      ]),
+    );
+  }
+}
+
+class _InlineMessage extends StatelessWidget {
+  final String message;
+  const _InlineMessage(this.message);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(message,
+          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
     );
   }
 }
@@ -194,14 +390,14 @@ class _PlanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.25)),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10)),
               child: Icon(Icons.flag, color: color, size: 20),
             ),
@@ -225,16 +421,13 @@ class _PlanCard extends StatelessWidget {
                   ]),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6)),
               child: Text(plan.role.toUpperCase(),
                   style: TextStyle(
-                      color: color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold)),
+                      color: color, fontSize: 10, fontWeight: FontWeight.bold)),
             ),
             if (onDelete != null) ...[
               const SizedBox(width: 4),
@@ -246,18 +439,14 @@ class _PlanCard extends StatelessWidget {
           ]),
           if (plan.targetAmount != null) ...[
             const SizedBox(height: 12),
-            Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Target',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 12)),
-                  Text(CurrencyFormatter.format(plan.targetAmount!),
-                      style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13)),
-                ]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Target',
+                  style:
+                      TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              Text(CurrencyFormatter.format(plan.targetAmount!),
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+            ]),
           ],
           if (plan.startDate != null || plan.endDate != null) ...[
             const SizedBox(height: 6),
@@ -276,9 +465,7 @@ class _PlanCard extends StatelessWidget {
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             Text('View details →',
                 style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
           ]),
         ]),
       ),
@@ -305,8 +492,8 @@ class _DateField extends StatelessWidget {
             lastDate: DateTime(2030),
             builder: (ctx, child) => Theme(
                 data: Theme.of(ctx).copyWith(
-                    colorScheme: const ColorScheme.dark(
-                        primary: AppTheme.primary)),
+                    colorScheme:
+                        const ColorScheme.dark(primary: AppTheme.primary)),
                 child: child!));
         if (picked != null) onPick(picked);
       },
@@ -321,9 +508,7 @@ class _DateField extends StatelessWidget {
           const SizedBox(width: 6),
           Flexible(
             child: Text(
-              date != null
-                  ? DateFormat('MMM d, yy').format(date!)
-                  : label,
+              date != null ? DateFormat('MMM d, yy').format(date!) : label,
               style: TextStyle(
                   color: date != null
                       ? AppTheme.textPrimary

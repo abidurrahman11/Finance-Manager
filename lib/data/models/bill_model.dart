@@ -6,6 +6,7 @@ class BillModel {
   final int dueDay;
   final String? notes;
   final DateTime createdAt;
+  final bool isRemote;
 
   BillModel({
     required this.id,
@@ -15,6 +16,7 @@ class BillModel {
     required this.dueDay,
     this.notes,
     required this.createdAt,
+    this.isRemote = false,
   });
 
   factory BillModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class BillModel {
       dueDay: json['due_day'],
       notes: json['notes'],
       createdAt: DateTime.parse(json['created_at']),
+      isRemote: json['is_remote'] ?? false,
     );
   }
 }
@@ -41,6 +44,7 @@ class BillPaymentStatus {
   final double? paidAmount;
   final String? paymentNotes;
   final DateTime? updatedAt;
+  final bool isRemote;
 
   BillPaymentStatus({
     required this.billId,
@@ -53,6 +57,7 @@ class BillPaymentStatus {
     this.paidAmount,
     this.paymentNotes,
     this.updatedAt,
+    this.isRemote = false,
   });
 
   bool get isPaid => status == 'paid';
@@ -73,6 +78,7 @@ class BillPaymentStatus {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
+      isRemote: json['is_remote'] ?? false,
     );
   }
 }

@@ -6,7 +6,6 @@ import '../../providers/providers.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../data/models/analytics_model.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
@@ -36,6 +35,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analytics'),
+        // Back button is shown automatically when this screen is pushed
         bottom: TabBar(
           controller: _tabCtrl,
           indicatorColor: AppTheme.primary,
@@ -192,7 +192,7 @@ class _CashFlowTab extends ConsumerWidget {
                               gridData: FlGridData(
                                 show: true,
                                 drawVerticalLine: false,
-                                getDrawingHorizontalLine: (v) => FlLine(
+                                getDrawingHorizontalLine: (v) => const FlLine(
                                   color: AppTheme.divider,
                                   strokeWidth: 1,
                                 ),
@@ -276,7 +276,7 @@ class _CashFlowTab extends ConsumerWidget {
           backDrawRodData: BackgroundBarChartRodData(
             show: true,
             toY: y * 1.3,
-            color: color.withOpacity(0.05),
+            color: color.withValues(alpha: 0.05),
           ),
         )
       ],
@@ -399,7 +399,7 @@ class _CategoryTab extends ConsumerWidget {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                            color: color.withOpacity(0.15),
+                            color: color.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8)),
                         child:
                             Icon(Icons.circle, color: color, size: 10),
@@ -431,7 +431,7 @@ class _CategoryTab extends ConsumerWidget {
                                 borderRadius: BorderRadius.circular(3),
                                 child: LinearProgressIndicator(
                                   value: pct,
-                                  backgroundColor: color.withOpacity(0.1),
+                                  backgroundColor: color.withValues(alpha: 0.1),
                                   valueColor:
                                       AlwaysStoppedAnimation<Color>(color),
                                   minHeight: 4,
@@ -439,7 +439,7 @@ class _CategoryTab extends ConsumerWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '${cat.expenseCount} transactions • ${(pct * 100).toStringAsFixed(1)}% of total',
+                                '${cat.expenseCount} transactions · ${(pct * 100).toStringAsFixed(1)}% of total',
                                 style: const TextStyle(
                                     color: AppTheme.textSecondary,
                                     fontSize: 11),
@@ -480,7 +480,6 @@ class _TrendsTab extends ConsumerWidget {
             );
           }
 
-          // Sort ascending for chart
           final sorted = [...trends]
             ..sort((a, b) => a.month.compareTo(b.month));
           final maxY = sorted.isEmpty
@@ -518,7 +517,7 @@ class _TrendsTab extends ConsumerWidget {
                             gridData: FlGridData(
                               show: true,
                               drawVerticalLine: false,
-                              getDrawingHorizontalLine: (v) => FlLine(
+                              getDrawingHorizontalLine: (v) => const FlLine(
                                 color: AppTheme.divider,
                                 strokeWidth: 1,
                               ),
@@ -589,8 +588,8 @@ class _TrendsTab extends ConsumerWidget {
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
                                     colors: [
-                                      AppTheme.primary.withOpacity(0.3),
-                                      AppTheme.primary.withOpacity(0.0),
+                                      AppTheme.primary.withValues(alpha: 0.3),
+                                      AppTheme.primary.withValues(alpha: 0.0),
                                     ],
                                   ),
                                 ),
@@ -616,7 +615,6 @@ class _TrendsTab extends ConsumerWidget {
 
               const SizedBox(height: 16),
 
-              // Month-by-month list (descending)
               ...trends.map((t) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Container(
@@ -629,7 +627,7 @@ class _TrendsTab extends ConsumerWidget {
                           width: 46,
                           height: 46,
                           decoration: BoxDecoration(
-                              color: AppTheme.primary.withOpacity(0.1),
+                              color: AppTheme.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10)),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -670,7 +668,7 @@ class _TrendsTab extends ConsumerWidget {
                                             .clamp(0.0, 1.0)
                                         : 0,
                                     backgroundColor:
-                                        AppTheme.primary.withOpacity(0.1),
+                                        AppTheme.primary.withValues(alpha: 0.1),
                                     valueColor:
                                         const AlwaysStoppedAnimation<Color>(
                                             AppTheme.primary),

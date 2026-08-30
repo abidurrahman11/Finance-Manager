@@ -20,6 +20,9 @@ class AuthState {
     this.isLoading = false,
   });
 
+  bool get hasRemoteSession =>
+      user != null && user!.email != AuthRepository.localUser.email;
+
   AuthState copyWith({
     AuthStatus? status,
     UserModel? user,
@@ -49,10 +52,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final user = await _repo.getMe();
         state = AuthState(status: AuthStatus.authenticated, user: user);
       } catch (_) {
-        state = const AuthState(status: AuthStatus.unauthenticated);
+        state = AuthState(
+          status: AuthStatus.unauthenticated,
+          user: AuthRepository.localUser,
+        );
       }
     } else {
-      state = const AuthState(status: AuthStatus.unauthenticated);
+      state = AuthState(
+        status: AuthStatus.unauthenticated,
+        user: AuthRepository.localUser,
+      );
     }
   }
 
@@ -65,7 +74,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return true;
     } catch (e) {
       state = state.copyWith(
-          isLoading: false, status: AuthStatus.unauthenticated, error: e.toString());
+        isLoading: false,
+        status: AuthStatus.unauthenticated,
+        user: AuthRepository.localUser,
+        error: e.toString(),
+      );
+      return false;
+    }
+  }
+
+  Future<void> refreshUser() async {
+    try {
+      final user = await _repo.getMe();
+      state = state.copyWith(user: user, status: AuthStatus.authenticated);
+    } catch (_) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        user: AuthRepository.localUser,
+      );
+    }
+  }
+
+  Future<bool> resendVerification(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      await _repo.resendVerification(email);
+      state = state.copyWith(isLoading: false);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
@@ -84,7 +121,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repo.logout();
-    state = const AuthState(status: AuthStatus.unauthenticated);
+    state = AuthState(
+      status: AuthStatus.unauthenticated,
+      user: AuthRepository.localUser,
+    );
+  }
+
+  /// Updates the user's display name and refreshes auth state.
+  Future<bool> updateProfile({required String name}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final updated = await _repo.updateProfile(name: name);
+      state = state.copyWith(isLoading: false, user: updated);
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
   }
 
   Future<bool> changePassword(String oldPass, String newPass) async {

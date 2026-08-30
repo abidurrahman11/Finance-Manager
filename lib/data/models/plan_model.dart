@@ -8,6 +8,7 @@ class PlanModel {
   final DateTime? endDate;
   final String role;
   final DateTime createdAt;
+  final bool isRemote;
 
   PlanModel({
     required this.id,
@@ -19,6 +20,7 @@ class PlanModel {
     this.endDate,
     required this.role,
     required this.createdAt,
+    this.isRemote = false,
   });
 
   factory PlanModel.fromJson(Map<String, dynamic> json) {
@@ -30,17 +32,20 @@ class PlanModel {
       targetAmount: json['target_amount'] != null
           ? double.parse(json['target_amount'].toString())
           : null,
-      startDate:
-          json['start_date'] != null ? DateTime.parse(json['start_date']) : null,
+      startDate: json['start_date'] != null
+          ? DateTime.parse(json['start_date'])
+          : null,
       endDate:
           json['end_date'] != null ? DateTime.parse(json['end_date']) : null,
       role: json['role'] ?? 'owner',
       createdAt: DateTime.parse(json['created_at']),
+      isRemote: json['is_remote'] ?? true,
     );
   }
 
   bool get isOwner => role == 'owner';
   bool get canEdit => role == 'owner' || role == 'editor';
+  bool get isShared => isRemote;
 }
 
 class PlanItemModel {
@@ -88,8 +93,8 @@ class PlanWithItems {
 
   double get totalExpected =>
       items.fold(0, (sum, item) => sum + item.expectedAmount);
-  double get totalSpent =>
-      items.fold(0, (sum, item) => sum + item.spentAmount);
+  double get totalSpent => items.fold(0, (sum, item) => sum + item.spentAmount);
+
   /// Raw ratio — may exceed 1.0 when over budget. clamp at call site for widgets.
   double get overallProgress =>
       totalExpected > 0 ? totalSpent / totalExpected : 0.0;
